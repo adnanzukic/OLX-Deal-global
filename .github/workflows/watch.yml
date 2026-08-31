@@ -1,0 +1,44 @@
+name: OLX RAM Watcher
+
+on:
+  workflow_dispatch: {}  # pokreće se preko vanjskog cron-job.org okidača (pouzdanije od GitHub-ovog ugrađenog rasporeda)
+
+permissions:
+  contents: write  # potrebno da bot može sačuvati (commit-ovati) ažurirano stanje
+
+jobs:
+  check-olx:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preuzmi kod repozitorija
+        uses: actions/checkout@v4
+
+      - name: Podesi Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Podesi Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Instaliraj Python pakete
+        run: pip install -r requirements.txt
+
+      - name: Pokreni provjeru OLX oglasa
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python scraper.py
+
+      - name: Sačuvaj ažurirano stanje nazad u repozitorij
+        run: |
+          git config user.name "olx-watcher-bot"
+          git config user.email "actions@github.com"
+          git add users/
+          if ! git diff --staged --quiet; then
+            git commit -m "Ažuriranje stanja oglasa [automatski]"
+            git pull --rebase
+            git push
+          fi
