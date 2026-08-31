@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="bs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OLX Deal Watcher</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #14161c;
+    --surface: #1b1e27;
+    --surface-2: #22252f;
+    --border: #2c303c;
+    --text: #edeef2;
+    --muted: #9297a6;
+    --accent: #ff8a3d;
+    --accent-dim: #7a4522;
+    --success: #4ade80;
+    --error: #f2545b;
+    --mono: 'IBM Plex Mono', monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif;
+    line-height: 1.55;
+  }
+
+  body {
+    background-image:
+      radial-gradient(circle at 20% -10%, rgba(255, 138, 61, 0.08), transparent 45%);
+  }
+
+  .wrap {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 64px 24px 96px;
+  }
+
+  /* --- Hero / signature element --- */
+  .hero {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 12px;
+  }
+
+  .radar {
+    position: relative;
+    width: 46px;
+    height: 46px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    border: 1.5px solid var(--accent-dim);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .radar::before, .radar::after {
+    content: "";
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid var(--accent);
+    opacity: 0;
+    animation: pulse 2.6s ease-out infinite;
+  }
+  .radar::after { animation-delay: 1.3s; }
+  .radar-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px 1px rgba(255, 138, 61, 0.7);
+  }
+  @keyframes pulse {
+    0%   { width: 8px; height: 8px; opacity: 0.9; }
+    100% { width: 60px; height: 60px; opacity: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .radar::before, .radar::after { animation: none; display: none; }
+  }
+
+  h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 28px;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+
+  .lede {
+    color: var(--muted);
+    font-size: 15px;
+    max-width: 46ch;
+    margin: 0 0 40px;
+  }
+
+  /* --- Sections --- */
+  section {
+    margin-bottom: 28px;
+  }
+
+  .row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+  }
+  .row > * { flex: 1; }
+
+  label {
+    display: block;
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  input[type="text"],
+  input[type="number"],
+  input[type="url"] {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    font-size: 14.5px;
+    padding: 11px 13px;
+    border-radius: 6px;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+  input:focus {
+    border-color: var(--accent);
+  }
+  input::placeholder { color: #5c6070; }
+
+  .mono-input input { font-family: var(--mono); font-size: 13.5px; }
+
+  .hint {
+    font-size: 12.5px;
+    color: #6b7080;
+    margin-top: 6px;
+  }
+  .hint a { color: var(--accent); text-decoration: none; }
+  .hint a:hover { text-decoration: underline; }
+
+  button {
+    font-family: 'Inter', sans-serif;
+    font-weight: 500;
+    font-size: 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text);
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  button:hover { border-color: var(--muted); }
+
+  .btn-load { white-space: nowrap; }
+
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #1a1200;
+    font-weight: 600;
+    width: 100%;
+    padding: 13px 16px;
+    font-size: 15px;
+  }
+  .btn-primary:hover { background: #ff9a56; border-color: #ff9a56; }
+  .btn-primary:disabled { opacity: 0.5; cursor: default; }
+
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 32px 0;
+  }
+
+  /* --- Advanced (collapsible) --- */
+  .advanced summary {
+    cursor: pointer;
+    font-size: 13.5px;
+    color: var(--muted);
+    user-select: none;
+    list-style: none;
+  }
+  .advanced summary::-webkit-details-marker { display: none; }
+  .advanced summary::before {
+    content: "▸ ";
+    color: var(--accent);
+  }
+  .advanced[open] summary::before { content: "▾ "; }
+  .advanced > div {
+    margin-top: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  /* --- Chat ID block --- */
+  .chatid-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px;
+  }
+  .chatid-steps {
+    font-size: 13.5px;
+    color: var(--muted);
+    margin: 0 0 14px;
+    padding-left: 18px;
+  }
+  .chatid-steps li { margin-bottom: 4px; }
+  .chatid-steps a { color: var(--accent); }
+
+  .chatid-found {
+    margin-top: 12px;
+    padding: 12px 14px;
+    border-radius: 6px;
+    background: rgba(74, 222, 128, 0.08);
+    border: 1px solid rgba(74, 222, 128, 0.3);
+    font-size: 13.5px;
+    display: none;
+  }
+  .chatid-found.show { display: block; }
+  .chatid-found strong { font-family: var(--mono); color: var(--success); }
+
+  /* --- Status message --- */
+  #status {
+    margin-top: 18px;
+    padding: 13px 15px;
+    border-radius: 6px;
+    font-size: 14px;
+    display: none;
+  }
+  #status.show { display: block; }
+  #status.ok {
+    background: rgba(74, 222, 128, 0.08);
+    border: 1px solid rgba(74, 222, 128, 0.3);
+    color: var(--success);
+  }
+  #status.err {
+    background: rgba(242, 84, 91, 0.08);
+    border: 1px solid rgba(242, 84, 91, 0.3);
+    color: var(--error);
+  }
+
+  footer {
+    margin-top: 56px;
+    font-size: 12.5px;
+    color: #5c6070;
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="hero">
+    <div class="radar"><div class="radar-dot"></div></div>
+    <h1>OLX Deal Watcher</h1>
+  </div>
+  <p class="lede">Reci nam šta tražiš na OLX-u i javljamo se na Telegram čim se pojavi oglas koji odgovara — ili čim nekom postojećem padne cijena.</p>
+
+  <form id="watcherForm">
+
+    <section>
+      <div class="row">
+        <div>
+          <label for="user">Tvoje ime</label>
+          <input type="text" id="user" placeholder="npr. Adnan" required>
+        </div>
+        <button type="button" class="btn-load" id="loadBtn">Učitaj moje postavke</button>
+      </div>
+      <p class="hint">Koristi se da razlikujemo tvoje postavke od postavki drugih ljudi koji koriste isti alat.</p>
+    </section>
+
+    <section>
+      <label for="search_url">Link OLX pretrage</label>
+      <div class="mono-input">
+        <input type="url" id="search_url" placeholder="https://olx.ba/pretraga?..." required>
+      </div>
+      <p class="hint">Idi na olx.ba, postavi filtere (kategorija, cijena) kako želiš, pa kopiraj link iz adresne trake ovdje.</p>
+    </section>
+
+    <section>
+      <label for="max_price_km">Najviša cijena (KM)</label>
+      <input type="number" id="max_price_km" placeholder="npr. 125" min="0">
+    </section>
+
+    <section>
+      <label for="required_any">Mora sadržavati (odvoji zarezom)</label>
+      <input type="text" id="required_any" placeholder="npr. 16gb, 2x8">
+      <p class="hint">Oglas mora imati BAR JEDNU od ovih riječi u naslovu ili opisu.</p>
+    </section>
+
+    <section>
+      <label for="excluded">Odbaci ako sadrži (odvoji zarezom)</label>
+      <input type="text" id="excluded" placeholder="npr. laptop, neispravno">
+    </section>
+
+    <details class="advanced">
+      <summary>Napredne postavke</summary>
+      <div>
+        <div>
+          <label for="required_all">Mora sadržavati SVE ove riječi</label>
+          <input type="text" id="required_all" placeholder="npr. ddr4">
+        </div>
+        <div>
+          <label for="min_speed_mhz">Minimalna brzina u MHz (za RAM)</label>
+          <input type="number" id="min_speed_mhz" placeholder="npr. 3200">
+        </div>
+        <div>
+          <label for="single_stick_max_price_km">Prag cijene za pojedinačan komad</label>
+          <input type="number" id="single_stick_max_price_km" placeholder="opciono">
+        </div>
+      </div>
+    </details>
+
+    <hr>
+
+    <section class="chatid-box">
+      <label style="margin-bottom:10px;">Telegram Chat ID</label>
+      <ol class="chatid-steps">
+        <li>Otvori bota: <a href="#" id="botLink" target="_blank">@TVOJ_BOT_USERNAME</a></li>
+        <li>Pošalji mu bilo koju poruku (npr. "zdravo")</li>
+        <li>Klikni dugme ispod, odmah nakon toga</li>
+      </ol>
+      <button type="button" id="findChatIdBtn">Pronađi moj Chat ID</button>
+      <div class="chatid-found" id="chatIdFound"></div>
+      <div style="margin-top:14px;" class="mono-input">
+        <input type="text" id="telegram_chat_id" placeholder="Chat ID će se popuniti ovdje" required>
+      </div>
+    </section>
+
+    <button type="submit" class="btn-primary" id="submitBtn">Sačuvaj postavke</button>
+
+    <div id="status"></div>
+
+  </form>
+
+  <footer>OLX Deal Watcher &middot; provjerava svakih 30 minuta &middot; besplatno, u pozadini</footer>
+
+</div>
+
+<script>
+  // ⚠️ PROMIJENI OVO na tvoj stvarni Cloudflare Worker URL nakon deploya
+  const WORKER_URL = "https://olx-deal-watcher.TVOJ-SUBDOMAIN.workers.dev";
+  // ⚠️ PROMIJENI OVO na stvaran username tvog Telegram bota
+  const BOT_USERNAME = "TVOJ_BOT_USERNAME";
+
+  document.getElementById("botLink").href = `https://t.me/${BOT_USERNAME}`;
+  document.getElementById("botLink").textContent = `@${BOT_USERNAME}`;
+
+  const form = document.getElementById("watcherForm");
+  const statusEl = document.getElementById("status");
+
+  function showStatus(message, ok) {
+    statusEl.textContent = message;
+    statusEl.className = "show " + (ok ? "ok" : "err");
+  }
+
+  function fillForm(c) {
+    document.getElementById("search_url").value = c.search_url || "";
+    document.getElementById("max_price_km").value = c.max_price_km ?? "";
+    document.getElementById("required_any").value = (c.required_keywords_any || []).join(", ");
+    document.getElementById("excluded").value = (c.excluded_keywords || []).join(", ");
+    document.getElementById("required_all").value = (c.required_keywords_all || []).join(", ");
+    document.getElementById("min_speed_mhz").value = c.min_speed_mhz ?? "";
+    document.getElementById("single_stick_max_price_km").value = c.single_stick_max_price_km ?? "";
+    document.getElementById("telegram_chat_id").value = c.telegram_chat_id || "";
+  }
+
+  document.getElementById("loadBtn").addEventListener("click", async () => {
+    const user = document.getElementById("user").value.trim();
+    if (!user) { showStatus("Prvo upiši svoje ime.", false); return; }
+    try {
+      const resp = await fetch(`${WORKER_URL}/api/config?user=${encodeURIComponent(user)}`);
+      const data = await resp.json();
+      if (data.exists) {
+        fillForm(data.criteria);
+        showStatus("Postavke učitane.", true);
+      } else {
+        showStatus("Nema još sačuvanih postavki za to ime — popuni obrazac ispod.", true);
+      }
+    } catch (e) {
+      showStatus("Greška pri učitavanju: " + e.message, false);
+    }
+  });
+
+  document.getElementById("findChatIdBtn").addEventListener("click", async () => {
+    const box = document.getElementById("chatIdFound");
+    box.className = "chatid-found show";
+    box.textContent = "Tražim...";
+    try {
+      const resp = await fetch(`${WORKER_URL}/api/find-chatid`);
+      const data = await resp.json();
+      if (data.found) {
+        box.innerHTML = `Pronašli smo: <strong>${data.first_name || "korisnik"}</strong> (ID: <strong>${data.chat_id}</strong>) — je li ovo ti?
+          <div style="margin-top:10px;">
+            <button type="button" id="confirmChatId">Da, to sam ja</button>
+          </div>`;
+        document.getElementById("confirmChatId").addEventListener("click", () => {
+          document.getElementById("telegram_chat_id").value = data.chat_id;
+          box.className = "chatid-found";
+        });
+      } else {
+        box.textContent = "Nismo ništa pronašli — pošalji botu poruku pa probaj ponovo.";
+      }
+    } catch (e) {
+      box.textContent = "Greška: " + e.message;
+    }
+  });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const submitBtn = document.getElementById("submitBtn");
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Čuvam...";
+
+    const payload = {
+      user: document.getElementById("user").value.trim(),
+      display_name: document.getElementById("user").value.trim(),
+      search_url: document.getElementById("search_url").value.trim(),
+      max_price_km: document.getElementById("max_price_km").value,
+      required_any: document.getElementById("required_any").value,
+      excluded: document.getElementById("excluded").value,
+      required_all: document.getElementById("required_all").value,
+      min_speed_mhz: document.getElementById("min_speed_mhz").value,
+      single_stick_max_price_km: document.getElementById("single_stick_max_price_km").value,
+      telegram_chat_id: document.getElementById("telegram_chat_id").value.trim(),
+    };
+
+    try {
+      const resp = await fetch(`${WORKER_URL}/api/config`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        showStatus("Sačuvano. Obavijesti stižu na Telegram čim se pojavi odgovarajući oglas.", true);
+      } else {
+        showStatus(data.error || "Nešto nije uspjelo.", false);
+      }
+    } catch (err) {
+      showStatus("Greška: " + err.message, false);
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Sačuvaj postavke";
+    }
+  });
+</script>
+
+</body>
+</html>
