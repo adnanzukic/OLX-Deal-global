@@ -12,7 +12,7 @@
  */
 
 const OWNER = "adnanzukic";
-const REPO = "OLX-Deal";
+const REPO = "OLX-Deal-global";
 const BRANCH = "main";
 
 function corsHeaders() {
