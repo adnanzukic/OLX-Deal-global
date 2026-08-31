@@ -1,1 +1,3 @@
-
+name = "olx-deal-watcher"
+main = "worker.js"
+compatibility_date = "2026-09-01"
