@@ -1,14 +1,15 @@
 name: OLX RAM Watcher
 
 on:
-  workflow_dispatch: {}  # pokreće se preko vanjskog cron-job.org okidača (pouzdanije od GitHub-ovog ugrađenog rasporeda)
+  workflow_dispatch: {}  # pokreće se preko vanjskog cron-job.org okidača
 
 permissions:
-  contents: write  # potrebno da bot može sačuvati (commit-ovati) ažurirano stanje
+  contents: write  # potrebno da bot može sačuvati ažurirano stanje
 
 jobs:
   check-olx:
     runs-on: ubuntu-latest
+
     steps:
       - name: Preuzmi kod repozitorija
         uses: actions/checkout@v4
@@ -26,11 +27,45 @@ jobs:
       - name: Instaliraj Python pakete
         run: pip install -r requirements.txt
 
-      - name: Pokreni provjeru OLX oglasa
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python scraper.py
+      - name: Test pristupa OLX-u
+        run: |
+          python - <<'PY'
+          import requests
+
+          urls = [
+              "https://olx.ba/",
+              "https://olx.ba/pretraga?attr=3228323032352d32303236293a3532284d616e75656c6e6929&attr_encoded=1&category_id=18&price_from=50000&price_to=65000"
+          ]
+
+          headers = {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+              "Accept-Language": "bs-BA,bs;q=0.9,en-US;q=0.8,en;q=0.7",
+          }
+
+          for url in urls:
+              print("\n========================================")
+              print("TEST:", url)
+              print("========================================")
+
+              try:
+                  response = requests.get(
+                      url,
+                      headers=headers,
+                      timeout=20,
+                      allow_redirects=True
+                  )
+
+                  print("STATUS:", response.status_code)
+                  print("FINAL URL:", response.url)
+                  print("CONTENT-TYPE:", response.headers.get("content-type"))
+                  print("CONTENT-LENGTH:", len(response.content))
+
+                  print("\nPRVIH 500 ZNAKOVA ODGOVORA:\n")
+                  print(response.text[:500])
+
+              except Exception as e:
+                  print("GREŠKA:", repr(e))
 
       - name: Sačuvaj ažurirano stanje nazad u repozitorij
         run: |
