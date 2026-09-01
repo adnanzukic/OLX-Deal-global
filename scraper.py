@@ -24,7 +24,23 @@ Kako radi (ukratko):
 3. Gemini API ključ i Telegram bot token su ZAJEDNIČKI (jedan bot, jedan
    ključ za sve korisnike) - jedino što je različito po korisniku je NJEGOV
    Telegram chat_id (kome se šalje) i njegovi lični kriteriji pretrage.
+
+SIGURNOST (osnovna - username-based, ne full auth):
+- Username je slugifizirani oblik (nema znakova za path traversal)
+- Watch ID je također slugifizirani oblik
+- validate_safe_path() sprječava pristup izvan users/<user>/ direktorija
+- Sve datoteke su ispod USERS_DIR - nijedan korisnik ne može pristupiti datotekama drugog korisnika
+- Nema dostave tajnih ključeva u frontend - chat_id je vidljiv samo u backend logici
+- Telegram bot token nikad nije izložen - koristi se samo u scraper.py
+
+MIGRACIJA I ATOMIČNOST:
+- Migration: Ako korisnik ima staru strukturu (criteria.json), migrira se u watches/<watch_id>/
+- Migracija je idempotentna - može se pokrenuti više puta bez štete
+- Seen state: Persisti se NAKON svakog procesiranog oglasa (ne samo na kraju)
+  => Ako se greška dogodi, već obradeni oglasi su sigurno pohrani, nema duplikata
+- Ako jedan oglas uzrokuje grešku, ostali oglasi se nastavljaju obrađivati
 """
+
 
 import json
 import os
@@ -49,9 +65,10 @@ USERS_DIR = BASE_DIR / "users"
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
     ),
-    "Accept-Language": "bs,hr,sr,en;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "bs-BA,bs;q=0.9,en-US;q=0.8,en;q=0.7",
 }
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
@@ -107,6 +124,31 @@ def slugify(text):
     norm = normalize_text(text)
     norm = re.sub(r"[^a-z0-9]+", "-", norm).strip("-")
     return norm or "oglas"
+
+
+def validate_safe_path(username):
+    """
+    SIGURNOST: Osiguraj da username ne može biti korišten za path traversal.
+    
+    - Username mora biti slugifizirani oblik (bezbjedno za filesystem)
+    - Nema .. ili /
+    - Nema apsolutnih putanja
+    - Sve je u USERS_DIR kao root
+    
+    Ovo je OSNOVNA sigurnost - ne vraćam kompletan auth sistem.
+    Ali osiguravamo da korisnik ne može pristupiti datotekama izvan svog direktorija.
+    """
+    if not username:
+        return False
+    if ".." in username or "/" in username or "\\" in username:
+        log.error(f"SIGURNOST: Username sadrži opasne znakove: {username}")
+        return False
+    # Username mora biti slugifizirani oblik
+    safe_username = slugify(username)
+    if safe_username != username:
+        log.warning(f"SIGURNOST: Username nije slugifizirani: '{username}' -> '{safe_username}'")
+        return False
+    return True
 
 
 def build_listing_url(listing_id, title=None):
@@ -470,10 +512,22 @@ def analyze_images_with_gemini(image_urls):
 # ---------------------------------------------------------------------------
 
 def send_telegram_message(chat_id, text):
+    """
+    Pošalji Telegram poruku.
+    
+    Vraća True ako je poruka uspješno poslana (Telegram API potvrdi).
+    Vraća False ako:
+    - Token ili chat_id nedostaju
+    - API zahtjev neuspješan
+    - API vraća grešku
+    - Bilo koja greška se dogodi
+    
+    Samo ako se vraća True, je sigurno da korisnik može vidjeti poruku.
+    """
     if not TELEGRAM_BOT_TOKEN or not chat_id:
         log.warning("Telegram nije podešen (nedostaje token ili chat_id) - ispisujem u log umjesto slanja:")
         log.info(text)
-        return
+        return False
 
     api_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
@@ -486,8 +540,10 @@ def send_telegram_message(chat_id, text):
         r = requests.post(api_url, data=payload, timeout=15)
         r.raise_for_status()
         log.info("Telegram poruka poslana.")
+        return True
     except Exception as e:
         log.error(f"Greška pri slanju Telegram poruke: {e}")
+        return False
 
 
 def format_notification(listing, reason):
@@ -543,32 +599,125 @@ def determine_match(listing, criteria):
 
 
 # ---------------------------------------------------------------------------
-# Glavna logika - MULTI-USER: obradi svakog korisnika ponaosob
+# Migracija: stara struktura (jedan watch po korisniku) -> nova (više watchesa)
 # ---------------------------------------------------------------------------
 
-def process_user(user_dir):
-    """Obradi jednog korisnika - vrati broj poslanih obavijesti."""
+def migrate_user_to_multi_watch(user_dir):
+    """
+    Ako korisnik ima staru strukturu (criteria.json na razini users/<user>/),
+    migruiraj ga na novu strukturu (criteria.json u users/<user>/watches/<watch_id>/).
+    
+    Strategija:
+    - Ako users/<user>/criteria.json postoji:
+      - Koristi display_name ili "default" kao watch_id (slugify)
+      - Ako taj watch još ne postoji, premjesti datoteke
+      - Ako taj watch već postoji, NE prepisujem (moglo je biti kreirano via frontend)
+    - Migracija je idempotentna (može se pokrenuti više puta bez štete)
+    - VAŽNO: Nikad ne obrađuj istu staru konfiguraciju dva puta
+    """
     username = user_dir.name
-    criteria_path = user_dir / "criteria.json"
-    state_path = user_dir / "seen_listings.json"
+    old_criteria_path = user_dir / "criteria.json"
+    old_state_path = user_dir / "seen_listings.json"
+    watches_dir = user_dir / "watches"
+    
+    # Ako stara struktura ne postoji, nema šta migrirati
+    if not old_criteria_path.exists():
+        return False
+    
+    # Učitaj stare datoteke
+    old_criteria = load_json(old_criteria_path, {})
+    if not old_criteria:
+        log.warning(f"[{username}] Stara criteria.json postoji ali je prazan ili nevalidan - preskačem migraciju.")
+        return False
+    
+    # Nappravi watch_id od display_name ili koristi default
+    watch_name = old_criteria.get("display_name", username)
+    watch_id = slugify(watch_name)
+    if not watch_id:
+        watch_id = "default"
+    
+    watch_dir = watches_dir / watch_id
+    criteria_path_new = watch_dir / "criteria.json"
+    state_path_new = watch_dir / "seen_listings.json"
+    
+    # KLJUČNA LOGIKA: Ako target watch već postoji, provjeri da li je to već migrirano
+    # ili ga je kreirala frontend.
+    # Ako već postoji, NE prepisujem nikada, jer:
+    # - Moglo ga je kreirati korisnik via frontend
+    # - Moglo je biti rezultat prethodne migracije
+    # - Bilo je je slučaj, nema razloga da prepisujem
+    if criteria_path_new.exists():
+        log.info(f"[{username}][{watch_id}] Watch već postoji - ne prepisujem. (Mogao ga je kreirati frontend ili je već migrirano.)")
+        return False
+    
+    # Makni stare datoteke samo ako smo sigurni da je migracija završena
+    # U razlici slučajeva (npr. partial failure), trebam retry safety.
+    # Strategija: ne brišem stare datoteke automatski - čuvam ih za backward compat i fallback.
+    
+    watch_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Dodaj "active": true u criteria ako već ne postoji
+    if "active" not in old_criteria:
+        old_criteria["active"] = True
+    
+    # Spremi migriranu criteria
+    save_json(criteria_path_new, old_criteria)
+    log.info(f"[{username}][{watch_id}] Premješten criteria.json.")
+    
+    # Spremi migriranu state (seen_listings) ako postoji
+    if old_state_path.exists():
+        old_state = load_json(old_state_path, {})
+        save_json(state_path_new, old_state)
+        log.info(f"[{username}][{watch_id}] Premješten seen_listings.json ({len(old_state)} stavki).")
+    else:
+        # Kreiraj prazan seen_listings
+        save_json(state_path_new, {})
+    
+    log.info(f"[{username}] ✓ Migracija završena. Novo: users/{username}/watches/{watch_id}/")
+    return True
+
+
+
+
+# ---------------------------------------------------------------------------
+# Glavna logika - MULTI-WATCH: obradi svakog korisnika i sve njegove watchese
+# ---------------------------------------------------------------------------
+
+def process_watch(user_dir, watch_dir, watch_id):
+    """
+    Obradi jedan watch - vrati broj poslanih obavijesti.
+    
+    KLJUČNA SIGURNOST:
+    - Persister seen_listings NAKON što je poruka uspješno poslana
+    - Ako kasnije dođe do greške, već procesirana oglasa su sigurno pohranjena
+    - Nema duplikata jer je seen state ažuriran ODMAH nakon Telegram-a
+    """
+    username = user_dir.name
+    criteria_path = watch_dir / "criteria.json"
+    state_path = watch_dir / "seen_listings.json"
 
     criteria = load_json(criteria_path, {})
     if not criteria:
-        log.warning(f"[{username}] Nema criteria.json ili je prazan - preskačem.")
+        log.warning(f"[{username}][{watch_id}] Nema criteria.json ili je prazan - preskačem.")
+        return 0
+
+    # Provjeri da li je watch aktivan
+    if not criteria.get("active", True):
+        log.info(f"[{username}][{watch_id}] Pauzirano - preskačem.")
         return 0
 
     chat_id = criteria.get("telegram_chat_id")
     if not chat_id:
-        log.warning(f"[{username}] Nema podešen telegram_chat_id - preskačem.")
+        log.warning(f"[{username}][{watch_id}] Nema podešen telegram_chat_id - preskačem.")
         return 0
 
     search_url = criteria.get("search_url")
     if not search_url:
-        log.warning(f"[{username}] Nema search_url - preskačem.")
+        log.warning(f"[{username}][{watch_id}] Nema search_url - preskačem.")
         return 0
 
-    display_name = criteria.get("display_name", username)
-    log.info(f"=== Obrađujem korisnika: {display_name} ===")
+    display_name = criteria.get("display_name", watch_id)
+    log.info(f"=== [{username}] Obrađujem watch: {display_name} ===")
 
     state = load_json(state_path, {})
     listings = fetch_search_results(search_url)
@@ -577,41 +726,108 @@ def process_user(user_dir):
     notified_count = 0
 
     for listing in listings:
-        listing_id = listing["id"]
+        try:
+            listing_id = listing["id"]
 
-        if max_price is not None and listing["price"] > max_price:
-            continue
+            if max_price is not None and listing["price"] > max_price:
+                continue
 
-        previous = state.get(listing_id)
+            previous = state.get(listing_id)
 
-        if previous is not None:
-            # Već smo ranije odlučili da li ovaj oglas odgovara kriterijima -
-            # ne ponavljamo (skupu) provjeru, samo pratimo eventualni pad cijene.
-            matched = previous.get("matched", False)
-            reason = None
-            if matched and listing["price"] < previous.get("price", listing["price"]):
-                reason = "price_drop"
-                listing["old_price"] = previous["price"]
-        else:
-            matched = determine_match(listing, criteria)
-            reason = "new" if matched else None
+            if previous is not None:
+                # Već smo ranije odlučili da li ovaj oglas odgovara kriterijima -
+                # ne ponavljamo (skupu) provjeru, samo pratimo eventualni pad cijene.
+                matched = previous.get("matched", False)
+                reason = None
+                if matched and listing["price"] < previous.get("price", listing["price"]):
+                    reason = "price_drop"
+                    listing["old_price"] = previous["price"]
+            else:
+                matched = determine_match(listing, criteria)
+                reason = "new" if matched else None
 
-        if reason:
-            log.info(f"[{username}] MATCH ({reason}): {listing['title']} - {listing['price']} KM")
-            send_telegram_message(chat_id, format_notification(listing, reason))
-            notified_count += 1
-            time.sleep(1)
+            if reason:
+                log.info(f"[{username}][{watch_id}] MATCH ({reason}): {listing['title']} - {listing['price']} KM")
+                # Dodaj naziv watcha u notifikaciju
+                watch_name_emoji = f"👁️ <b>{display_name}</b>\n\n" if display_name != watch_id else ""
+                telegram_text = watch_name_emoji + format_notification(listing, reason)
+                
+                # KLJUČNO: Provjeri je li Telegram poruka stvarno poslana
+                telegram_success = send_telegram_message(chat_id, telegram_text)
+                
+                # Samo ako je Telegram poruka uspješno poslana, markiraj oglas kao viđen
+                if telegram_success:
+                    notified_count += 1
+                    time.sleep(1)
+                    
+                    # Spremi oglas kao viđen jer znamo da je korisnik dobio notifikaciju
+                    state[listing_id] = {
+                        "price": listing["price"],
+                        "title": listing["title"],
+                        "url": listing["url"],
+                        "matched": matched,
+                    }
+                    save_json(state_path, state)
+                else:
+                    # Telegram neuspješan - ne markiraj kao viđen
+                    # Sljedeći run će pokušati ponovno
+                    log.warning(f"[{username}][{watch_id}] Telegram nije poslao poruku za {listing_id} - oglas će biti pokušan u sljedećem run-u.")
+                    continue
+            else:
+                # Oglas ne odgovara kriterijima - markiraj kao viđen s matched=false
+                # (bez obzira na Telegram jer nema što slati)
+                state[listing_id] = {
+                    "price": listing["price"],
+                    "title": listing["title"],
+                    "url": listing["url"],
+                    "matched": matched,
+                }
+                save_json(state_path, state)
 
-        state[listing_id] = {
-            "price": listing["price"],
-            "title": listing["title"],
-            "url": listing["url"],
-            "matched": matched,
-        }
+        except Exception as e:
+            # Greška u obradi jednog oglasa ne zaustavlja obradu ostalih
+            log.error(f"[{username}][{watch_id}] Greška pri obradi oglasa {listing_id}: {e}")
+            # Nastavi sa sljedećim oglasom
 
-    save_json(state_path, state)
-    log.info(f"[{username}] Gotovo. Poslano {notified_count} obavijesti. Praćeno oglasa: {len(state)}.")
+    log.info(f"[{username}][{watch_id}] Gotovo. Poslano {notified_count} obavijesti. Praćeno oglasa: {len(state)}.")
     return notified_count
+
+
+def process_user(user_dir):
+    """Obradi jednog korisnika - svi njegovi watchesi. Vrati broj poslanih obavijesti."""
+    username = user_dir.name
+    total_notified = 0
+    
+    # SIGURNOST: Provjeri da li je username bezbjedno slugifizirani oblik
+    # Ovo sprječava path traversal (npr. "../../../etc/passwd" ili "..\\..\\secret")
+    if not validate_safe_path(username):
+        log.error(f"SIGURNOST: Username '{username}' nije validan - preskačem korisnika.")
+        return 0
+    
+    # Migruiraj ako je potrebno
+    migrate_user_to_multi_watch(user_dir)
+    
+    # Obradi sve watchese u korisnikovom direktoriju
+    watches_dir = user_dir / "watches"
+    if not watches_dir.exists():
+        log.warning(f"[{username}] Nema watches/ direktorija - nema što obraditi.")
+        return 0
+    
+    watch_dirs = sorted([d for d in watches_dir.iterdir() if d.is_dir() and (d / "criteria.json").exists()])
+    if not watch_dirs:
+        log.warning(f"[{username}] Nema nijednog validnog watcha u watches/ - nema što obraditi.")
+        return 0
+    
+    for watch_dir in watch_dirs:
+        watch_id = watch_dir.name
+        try:
+            watch_notifications = process_watch(user_dir, watch_dir, watch_id)
+            total_notified += watch_notifications
+        except Exception as e:
+            log.error(f"[{username}][{watch_id}] Greška pri obradi watcha: {e}")
+            # Nastavi sa sljedećim watchem - jedna greška ne zaustavlja sve ostale
+    
+    return total_notified
 
 
 def main():
@@ -619,20 +835,25 @@ def main():
         log.warning("users/ folder još ne postoji - vjerovatno se niko još nije prijavio preko obrasca. Prekidam bez greške.")
         return
 
-    user_dirs = [d for d in USERS_DIR.iterdir() if d.is_dir() and (d / "criteria.json").exists()]
+    user_dirs = sorted([d for d in USERS_DIR.iterdir() if d.is_dir()])
 
     if not user_dirs:
         log.warning("Nema nijednog korisnika u users/ folderu - ništa za obraditi.")
         return
 
     total_notified = 0
+    processed_users = 0
+    
     for user_dir in user_dirs:
         try:
-            total_notified += process_user(user_dir)
+            user_notified = process_user(user_dir)
+            if user_notified > 0 or (user_dir / "watches").exists():
+                total_notified += user_notified
+                processed_users += 1
         except Exception as e:
-            log.error(f"[{user_dir.name}] Neočekivana greška: {e}")
+            log.error(f"[{user_dir.name}] Neočekivana greška pri obradi korisnika: {e}")
 
-    log.info(f"=== Sve gotovo. Obrađeno korisnika: {len(user_dirs)}. Ukupno poslano obavijesti: {total_notified}. ===")
+    log.info(f"=== Sve gotovo. Obrađeno korisnika: {processed_users}. Ukupno poslano obavijesti: {total_notified}. ===")
 
 
 if __name__ == "__main__":

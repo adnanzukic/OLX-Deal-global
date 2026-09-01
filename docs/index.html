@@ -162,6 +162,7 @@
     transition: border-color 0.15s ease, background 0.15s ease;
   }
   button:hover { border-color: var(--muted); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .btn-load { white-space: nowrap; }
 
@@ -174,8 +175,23 @@
     padding: 13px 16px;
     font-size: 15px;
   }
-  .btn-primary:hover { background: #ff9a56; border-color: #ff9a56; }
+  .btn-primary:hover:not(:disabled) { background: #ff9a56; border-color: #ff9a56; }
   .btn-primary:disabled { opacity: 0.5; cursor: default; }
+
+  .btn-add {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #1a1200;
+    font-weight: 600;
+    padding: 13px 20px;
+    width: 100%;
+    margin-top: 28px;
+  }
+
+  .btn-small {
+    padding: 7px 12px;
+    font-size: 12.5px;
+  }
 
   hr {
     border: none;
@@ -233,30 +249,133 @@
   .chatid-found strong { font-family: var(--mono); color: var(--success); }
 
   /* --- Status message --- */
-  #status {
+  .status {
     margin-top: 18px;
     padding: 13px 15px;
     border-radius: 6px;
     font-size: 14px;
     display: none;
   }
-  #status.show { display: block; }
-  #status.ok {
+  .status.show { display: block; }
+  .status.ok {
     background: rgba(74, 222, 128, 0.08);
     border: 1px solid rgba(74, 222, 128, 0.3);
     color: var(--success);
   }
-  #status.err {
+  .status.err {
     background: rgba(242, 84, 91, 0.08);
     border: 1px solid rgba(242, 84, 91, 0.3);
     color: var(--error);
   }
+
+  /* --- Watches List --- */
+  .watches-list {
+    display: none;
+  }
+  .watches-list.show { display: block; }
+
+  .watch-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    gap: 12px;
+  }
+
+  .watch-info {
+    flex: 1;
+  }
+
+  .watch-name {
+    font-weight: 600;
+    font-size: 15px;
+    margin: 0 0 6px;
+  }
+
+  .watch-meta {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+
+  .watch-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .btn-icon {
+    padding: 8px 10px;
+    font-size: 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+  }
+
+  /* --- Modal --- */
+  .modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .modal.show { display: flex; }
+
+  .modal-content {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    max-width: 640px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+  }
+
+  .modal-header {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 24px;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+
+  .modal-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-close:hover { color: var(--text); }
 
   footer {
     margin-top: 56px;
     font-size: 12.5px;
     color: #5c6070;
   }
+
+  .hidden { display: none !important; }
 </style>
 </head>
 <body>
@@ -269,132 +388,352 @@
   </div>
   <p class="lede">Reci nam šta tražiš na OLX-u i javljamo se na Telegram čim se pojavi oglas koji odgovara — ili čim nekom postojećem padne cijena.</p>
 
-  <form id="watcherForm">
-
+  <!-- USER SETUP -->
+  <div id="userSetup" style="display: block;">
     <section>
       <div class="row">
         <div>
           <label for="user">Tvoje ime</label>
           <input type="text" id="user" placeholder="npr. Adnan" required>
         </div>
-        <button type="button" class="btn-load" id="loadBtn">Učitaj moje postavke</button>
+        <button type="button" class="btn-load" id="loadWatchesBtn">Učitaj moje watchese</button>
       </div>
       <p class="hint">Koristi se da razlikujemo tvoje postavke od postavki drugih ljudi koji koriste isti alat.</p>
     </section>
+    <div id="setupStatus" class="status"></div>
+  </div>
 
+  <!-- WATCHES LIST -->
+  <div id="watchesList" class="watches-list">
     <section>
-      <label for="search_url">Link OLX pretrage</label>
-      <div class="mono-input">
-        <input type="url" id="search_url" placeholder="https://olx.ba/pretraga?..." required>
-      </div>
-      <p class="hint">Idi na olx.ba, postavi filtere (kategorija, cijena) kako želiš, pa kopiraj link iz adresne trake ovdje.</p>
+      <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 16px; font-family: Space Grotesk;">Moja praćenja</h2>
+      <div id="watchesContainer"></div>
+      <button type="button" class="btn-add" id="addWatchBtn">+ Dodaj novo praćenje</button>
     </section>
-
-    <section>
-      <label for="max_price_km">Najviša cijena (KM)</label>
-      <input type="number" id="max_price_km" placeholder="npr. 125" min="0">
-    </section>
-
-    <section>
-      <label for="required_any">Mora sadržavati (odvoji zarezom)</label>
-      <input type="text" id="required_any" placeholder="npr. 16gb, 2x8">
-      <p class="hint">Oglas mora imati BAR JEDNU od ovih riječi u naslovu ili opisu.</p>
-    </section>
-
-    <section>
-      <label for="excluded">Odbaci ako sadrži (odvoji zarezom)</label>
-      <input type="text" id="excluded" placeholder="npr. laptop, neispravno">
-    </section>
-
-    <details class="advanced">
-      <summary>Napredne postavke</summary>
-      <div>
-        <div>
-          <label for="required_all">Mora sadržavati SVE ove riječi</label>
-          <input type="text" id="required_all" placeholder="npr. ddr4">
-        </div>
-        <div>
-          <label for="min_speed_mhz">Minimalna brzina u MHz (za RAM)</label>
-          <input type="number" id="min_speed_mhz" placeholder="npr. 3200">
-        </div>
-        <div>
-          <label for="single_stick_max_price_km">Prag cijene za pojedinačan komad</label>
-          <input type="number" id="single_stick_max_price_km" placeholder="opciono">
-        </div>
-      </div>
-    </details>
-
-    <hr>
-
-    <section class="chatid-box">
-      <label style="margin-bottom:10px;">Telegram Chat ID</label>
-      <ol class="chatid-steps">
-        <li>Otvori bota: <a href="#" id="botLink" target="_blank">@TVOJ_BOT_USERNAME</a></li>
-        <li>Pošalji mu bilo koju poruku (npr. "zdravo")</li>
-        <li>Klikni dugme ispod, odmah nakon toga</li>
-      </ol>
-      <button type="button" id="findChatIdBtn">Pronađi moj Chat ID</button>
-      <div class="chatid-found" id="chatIdFound"></div>
-      <div style="margin-top:14px;" class="mono-input">
-        <input type="text" id="telegram_chat_id" placeholder="Chat ID će se popuniti ovdje" required>
-      </div>
-    </section>
-
-    <button type="submit" class="btn-primary" id="submitBtn">Sačuvaj postavke</button>
-
-    <div id="status"></div>
-
-  </form>
-
-  <footer>OLX Deal Watcher &middot; provjerava svakih 30 minuta &middot; besplatno, u pozadini</footer>
+    <div id="listStatus" class="status"></div>
+  </div>
 
 </div>
 
+<!-- MODAL FOR ADD/EDIT WATCH -->
+<div id="watchModal" class="modal">
+  <div class="modal-content">
+    <button type="button" class="modal-close" id="modalCloseBtn">✕</button>
+    <div class="modal-header" id="modalTitle">Novo praćenje</div>
+
+    <form id="watchForm">
+      <input type="hidden" id="editingWatchId">
+
+      <section>
+        <label for="watchName">Naziv praćenja</label>
+        <input type="text" id="watchName" placeholder="npr. Automobili, Gaming monitori" required>
+      </section>
+
+      <section>
+        <label for="search_url">Link OLX pretrage</label>
+        <div class="mono-input">
+          <input type="url" id="search_url" placeholder="https://olx.ba/pretraga?..." required>
+        </div>
+        <p class="hint">Idi na olx.ba, postavi filtere (kategorija, cijena) kako želiš, pa kopiraj link iz adresne trake ovdje.</p>
+      </section>
+
+      <section>
+        <label for="max_price_km">Najviša cijena (KM)</label>
+        <input type="number" id="max_price_km" placeholder="npr. 125" min="0">
+      </section>
+
+      <section>
+        <label for="required_any">Mora sadržavati (odvoji zarezom)</label>
+        <input type="text" id="required_any" placeholder="npr. 16gb, 2x8">
+        <p class="hint">Oglas mora imati BAR JEDNU od ovih riječi u naslovu ili opisu.</p>
+      </section>
+
+      <section>
+        <label for="excluded">Odbaci ako sadrži (odvoji zarezom)</label>
+        <input type="text" id="excluded" placeholder="npr. laptop, neispravno">
+      </section>
+
+      <details class="advanced">
+        <summary>Napredne postavke</summary>
+        <div>
+          <div>
+            <label for="required_all">Mora sadržavati SVE ove riječi</label>
+            <input type="text" id="required_all" placeholder="npr. ddr4">
+          </div>
+          <div>
+            <label for="min_speed_mhz">Minimalna brzina u MHz (za RAM)</label>
+            <input type="number" id="min_speed_mhz" placeholder="npr. 3200">
+          </div>
+          <div>
+            <label for="single_stick_max_price_km">Prag cijene za pojedinačan komad</label>
+            <input type="number" id="single_stick_max_price_km" placeholder="opciono">
+          </div>
+        </div>
+      </details>
+
+      <hr>
+
+      <section class="chatid-box">
+        <label style="margin-bottom:10px;">Telegram Chat ID</label>
+        <ol class="chatid-steps">
+          <li>Otvori bota: <a href="#" id="botLink" target="_blank">@TVOJ_BOT_USERNAME</a></li>
+          <li>Pošalji mu bilo koju poruku (npr. "zdravo")</li>
+          <li>Klikni dugme ispod, odmah nakon toga</li>
+        </ol>
+        <button type="button" id="findChatIdBtn" class="btn-small">Pronađi moj Chat ID</button>
+        <div class="chatid-found" id="chatIdFound"></div>
+        <div style="margin-top:14px;" class="mono-input">
+          <input type="text" id="telegram_chat_id" placeholder="Chat ID će se popuniti ovdje" required>
+        </div>
+      </section>
+
+      <button type="submit" class="btn-primary" id="submitBtn">Sačuvaj praćenje</button>
+      <div id="formStatus" class="status"></div>
+    </form>
+  </div>
+</div>
+
+<footer>OLX Deal Watcher &middot; provjerava svakih 30 minuta &middot; besplatno, u pozadini</footer>
+
 <script>
-  // ⚠️ PROMIJENI OVO na tvoj stvarni Cloudflare Worker URL nakon deploya
   const WORKER_URL = "https://olx-deal-watcher.adnan69zukic.workers.dev";
-  // ⚠️ PROMIJENI OVO na stvaran username tvog Telegram bota
   const BOT_USERNAME = "olx_deal_global_bot";
 
   document.getElementById("botLink").href = `https://t.me/${BOT_USERNAME}`;
   document.getElementById("botLink").textContent = `@${BOT_USERNAME}`;
 
-  const form = document.getElementById("watcherForm");
-  const statusEl = document.getElementById("status");
+  // ============ STATE ============
+  let currentUser = "";
+  let watches = [];
 
-  function showStatus(message, ok) {
-    statusEl.textContent = message;
-    statusEl.className = "show " + (ok ? "ok" : "err");
+  // ============ UTILITIES ============
+  function showStatus(el, message, ok) {
+    el.textContent = message;
+    el.className = "status show " + (ok ? "ok" : "err");
   }
 
-  function fillForm(c) {
-    document.getElementById("search_url").value = c.search_url || "";
-    document.getElementById("max_price_km").value = c.max_price_km ?? "";
-    document.getElementById("required_any").value = (c.required_keywords_any || []).join(", ");
-    document.getElementById("excluded").value = (c.excluded_keywords || []).join(", ");
-    document.getElementById("required_all").value = (c.required_keywords_all || []).join(", ");
-    document.getElementById("min_speed_mhz").value = c.min_speed_mhz ?? "";
-    document.getElementById("single_stick_max_price_km").value = c.single_stick_max_price_km ?? "";
-    document.getElementById("telegram_chat_id").value = c.telegram_chat_id || "";
+  function closeModal() {
+    document.getElementById("watchModal").classList.remove("show");
+    document.getElementById("watchForm").reset();
+    document.getElementById("editingWatchId").value = "";
   }
 
-  document.getElementById("loadBtn").addEventListener("click", async () => {
+  async function openModal(watchId = null) {
+    document.getElementById("watchModal").classList.add("show");
+    if (watchId) {
+      document.getElementById("modalTitle").textContent = "Uredi praćenje";
+      // Load full watch details from API
+      try {
+        const resp = await fetch(`${WORKER_URL}/api/watches/${watchId}?user=${encodeURIComponent(currentUser)}`);
+        const data = await resp.json();
+        if (data.exists && data.watch) {
+          fillFormFromWatch(data.watch);
+        } else {
+          const watch = watches.find(w => w.id === watchId);
+          if (watch) fillFormFromWatch(watch);
+        }
+      } catch (e) {
+        console.error("Greška pri učitavanju watcha:", e);
+        const watch = watches.find(w => w.id === watchId);
+        if (watch) fillFormFromWatch(watch);
+      }
+    } else {
+      document.getElementById("modalTitle").textContent = "Novo praćenje";
+      document.getElementById("watchForm").reset();
+    }
+    document.getElementById("editingWatchId").value = watchId || "";
+  }
+
+  function fillFormFromWatch(watch) {
+    document.getElementById("watchName").value = watch.display_name || "";
+    document.getElementById("search_url").value = watch.search_url || "";
+    document.getElementById("max_price_km").value = watch.max_price_km ?? "";
+    document.getElementById("required_any").value = (watch.required_keywords_any || []).join(", ");
+    document.getElementById("excluded").value = (watch.excluded_keywords || []).join(", ");
+    document.getElementById("required_all").value = (watch.required_keywords_all || []).join(", ");
+    document.getElementById("min_speed_mhz").value = watch.min_speed_mhz ?? "";
+    document.getElementById("single_stick_max_price_km").value = watch.single_stick_max_price_km ?? "";
+    document.getElementById("telegram_chat_id").value = watch.telegram_chat_id || "";
+  }
+
+  function parseCsvList(value) {
+    return (value || "")
+      .split(",")
+      .map(s => s.trim())
+      .filter(Boolean);
+  }
+
+  function formatPrice(price) {
+    return price ? `do ${price} KM` : "bez limita";
+  }
+
+  // ============ LOAD WATCHES ============
+  document.getElementById("loadWatchesBtn").addEventListener("click", async () => {
     const user = document.getElementById("user").value.trim();
-    if (!user) { showStatus("Prvo upiši svoje ime.", false); return; }
+    if (!user) {
+      showStatus(document.getElementById("setupStatus"), "Prvo upiši svoje ime.", false);
+      return;
+    }
+
     try {
-      const resp = await fetch(`${WORKER_URL}/api/config?user=${encodeURIComponent(user)}`);
+      currentUser = user;
+      const resp = await fetch(`${WORKER_URL}/api/watches?user=${encodeURIComponent(user)}`);
       const data = await resp.json();
-      if (data.exists) {
-        fillForm(data.criteria);
-        showStatus("Postavke učitane.", true);
+
+      if (resp.ok) {
+        watches = data.watches || [];
+        renderWatches();
+        document.getElementById("userSetup").style.display = "none";
+        document.getElementById("watchesList").classList.add("show");
       } else {
-        showStatus("Nema još sačuvanih postavki za to ime — popuni obrazac ispod.", true);
+        showStatus(document.getElementById("setupStatus"), data.error || "Greška pri učitavanju", false);
       }
     } catch (e) {
-      showStatus("Greška pri učitavanju: " + e.message, false);
+      showStatus(document.getElementById("setupStatus"), "Greška: " + e.message, false);
     }
   });
 
+  // ============ RENDER WATCHES ============
+  function renderWatches() {
+    const container = document.getElementById("watchesContainer");
+    if (watches.length === 0) {
+      container.innerHTML = '<p style="color: var(--muted); text-align: center;">Nemaš još nijednog praćenja. Dodaj prvo!</p>';
+      return;
+    }
+
+    container.innerHTML = watches.map(watch => `
+      <div class="watch-item">
+        <div class="watch-info">
+          <p class="watch-name">${watch.display_name}</p>
+          <div class="watch-meta">
+            ${watch.active ? '✓ Aktivno' : '⏸ Pauzirano'}<br>
+            ${formatPrice(watch.max_price_km)}
+          </div>
+        </div>
+        <div class="watch-actions">
+          <button type="button" class="btn-icon" data-action="edit" data-watch="${watch.id}">Uredi</button>
+          <button type="button" class="btn-icon" data-action="toggle" data-watch="${watch.id}">
+            ${watch.active ? 'Pauziraj' : 'Aktiviraj'}
+          </button>
+          <button type="button" class="btn-icon" data-action="delete" data-watch="${watch.id}">Obriši</button>
+        </div>
+      </div>
+    `).join("");
+
+    // Attach event listeners
+    container.querySelectorAll("[data-action]").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        const action = btn.dataset.action;
+        const watchId = btn.dataset.watch;
+
+        if (action === "edit") openModal(watchId);
+        else if (action === "delete") await deleteWatch(watchId);
+        else if (action === "toggle") await toggleWatch(watchId);
+      });
+    });
+  }
+
+  // ============ ADD WATCH ============
+  document.getElementById("addWatchBtn").addEventListener("click", () => {
+    openModal();
+  });
+
+  // ============ FORM SUBMISSION ============
+  document.getElementById("watchForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const watchId = document.getElementById("editingWatchId").value;
+    const payload = {
+      user: currentUser,
+      display_name: document.getElementById("watchName").value.trim(),
+      search_url: document.getElementById("search_url").value.trim(),
+      max_price_km: document.getElementById("max_price_km").value,
+      required_any: document.getElementById("required_any").value,
+      excluded: document.getElementById("excluded").value,
+      required_all: document.getElementById("required_all").value,
+      min_speed_mhz: document.getElementById("min_speed_mhz").value,
+      single_stick_max_price_km: document.getElementById("single_stick_max_price_km").value,
+      telegram_chat_id: document.getElementById("telegram_chat_id").value.trim(),
+    };
+
+    const submitBtn = document.getElementById("submitBtn");
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Čuvam...";
+
+    try {
+      const url = watchId
+        ? `${WORKER_URL}/api/watches/${watchId}`
+        : `${WORKER_URL}/api/watches`;
+      const method = watchId ? "PUT" : "POST";
+
+      const resp = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await resp.json();
+      if (resp.ok) {
+        showStatus(document.getElementById("formStatus"), "Sačuvano!", true);
+        setTimeout(() => {
+          closeModal();
+          document.getElementById("loadWatchesBtn").click();
+        }, 800);
+      } else {
+        showStatus(document.getElementById("formStatus"), data.error || "Nešto nije uspjelo", false);
+      }
+    } catch (e) {
+      showStatus(document.getElementById("formStatus"), "Greška: " + e.message, false);
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Sačuvaj praćenje";
+    }
+  });
+
+  // ============ DELETE WATCH ============
+  async function deleteWatch(watchId) {
+    if (!confirm("Sigurno želiš obrisati ovo praćenje?")) return;
+
+    try {
+      const resp = await fetch(`${WORKER_URL}/api/watches/${watchId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user: currentUser }),
+      });
+
+      if (resp.ok) {
+        document.getElementById("loadWatchesBtn").click();
+      } else {
+        const data = await resp.json();
+        showStatus(document.getElementById("listStatus"), data.error || "Greška pri brisanju", false);
+      }
+    } catch (e) {
+      showStatus(document.getElementById("listStatus"), "Greška: " + e.message, false);
+    }
+  }
+
+  // ============ TOGGLE WATCH ============
+  async function toggleWatch(watchId) {
+    try {
+      const resp = await fetch(`${WORKER_URL}/api/watches/${watchId}/toggle`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user: currentUser }),
+      });
+
+      if (resp.ok) {
+        document.getElementById("loadWatchesBtn").click();
+      } else {
+        const data = await resp.json();
+        showStatus(document.getElementById("listStatus"), data.error || "Greška", false);
+      }
+    } catch (e) {
+      showStatus(document.getElementById("listStatus"), "Greška: " + e.message, false);
+    }
+  }
+
+  // ============ FIND CHAT ID ============
   document.getElementById("findChatIdBtn").addEventListener("click", async () => {
     const box = document.getElementById("chatIdFound");
     box.className = "chatid-found show";
@@ -405,7 +744,7 @@
       if (data.found) {
         box.innerHTML = `Pronašli smo: <strong>${data.first_name || "korisnik"}</strong> (ID: <strong>${data.chat_id}</strong>) — je li ovo ti?
           <div style="margin-top:10px;">
-            <button type="button" id="confirmChatId">Da, to sam ja</button>
+            <button type="button" id="confirmChatId" class="btn-small">Da, to sam ja</button>
           </div>`;
         document.getElementById("confirmChatId").addEventListener("click", () => {
           document.getElementById("telegram_chat_id").value = data.chat_id;
@@ -419,43 +758,10 @@
     }
   });
 
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const submitBtn = document.getElementById("submitBtn");
-    submitBtn.disabled = true;
-    submitBtn.textContent = "Čuvam...";
-
-    const payload = {
-      user: document.getElementById("user").value.trim(),
-      display_name: document.getElementById("user").value.trim(),
-      search_url: document.getElementById("search_url").value.trim(),
-      max_price_km: document.getElementById("max_price_km").value,
-      required_any: document.getElementById("required_any").value,
-      excluded: document.getElementById("excluded").value,
-      required_all: document.getElementById("required_all").value,
-      min_speed_mhz: document.getElementById("min_speed_mhz").value,
-      single_stick_max_price_km: document.getElementById("single_stick_max_price_km").value,
-      telegram_chat_id: document.getElementById("telegram_chat_id").value.trim(),
-    };
-
-    try {
-      const resp = await fetch(`${WORKER_URL}/api/config`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await resp.json();
-      if (resp.ok) {
-        showStatus("Sačuvano. Obavijesti stižu na Telegram čim se pojavi odgovarajući oglas.", true);
-      } else {
-        showStatus(data.error || "Nešto nije uspjelo.", false);
-      }
-    } catch (err) {
-      showStatus("Greška: " + err.message, false);
-    } finally {
-      submitBtn.disabled = false;
-      submitBtn.textContent = "Sačuvaj postavke";
-    }
+  // ============ MODAL CONTROLS ============
+  document.getElementById("modalCloseBtn").addEventListener("click", closeModal);
+  document.getElementById("watchModal").addEventListener("click", (e) => {
+    if (e.target.id === "watchModal") closeModal();
   });
 </script>
 
