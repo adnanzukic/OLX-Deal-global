@@ -1,0 +1,22 @@
+{
+  "display_name": "RAM",
+  "search_url": "https://olx.ba/pretraga?attr=323037312844445234293a32343337284465736b746f70205043293a333037372831362047422c333220474229&attr_encoded=1&category_id=161&q=ram&sort_by=price&sort_order=asc&price_to=130",
+  "active": true,
+  "max_price_km": 130,
+  "required_keywords_any": [
+    "16GB"
+  ],
+  "required_keywords_all": [
+    "DDR4",
+    "3200",
+    "16GB"
+  ],
+  "excluded_keywords": [
+    "laptop",
+    "neispravno"
+  ],
+  "min_speed_mhz": 3200,
+  "single_stick_max_price_km": null,
+  "use_vision_fallback": true,
+  "telegram_chat_id": "7791159132"
+}
