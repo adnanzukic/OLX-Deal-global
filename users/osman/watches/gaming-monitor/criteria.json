@@ -1,22 +1,36 @@
 {
-  "display_name": "RAM",
-  "search_url": "https://olx.ba/pretraga?attr=323037312844445234293a32343337284465736b746f70205043293a333037372831362047422c333220474229&attr_encoded=1&category_id=161&q=ram&sort_by=price&sort_order=asc&price_to=130",
-  "active": true,
-  "max_price_km": 130,
+  "_komentar": "Ovo je jedini fajl koji trebaš mijenjati kad želiš tražiti nešto drugo (npr. grafičku karticu umjesto RAM-a). Sačuvaj fajl nakon izmjene, bot će od sljedeće provjere koristiti nove kriterije.",
+
+  "search_url": "https://olx.ba/pretraga?attr=323037312844445234293a32343337284465736b746f70205043293a3330373728313620474229&attr_encoded=1&category_id=161&q=ram&sort_by=price&sort_order=asc&price_to=125",
+
+  "max_price_km": 125,
+
   "required_keywords_any": [
-    "16GB",
-    "2x8",
-    "DDR4",
-    "3200",
-    "32GB"
+    "16gb", "16 gb",
+    "2x8", "2 x 8",
+    "1x16", "1 x 16"
   ],
-  "required_keywords_all": [],
+  "required_keywords_all": ["ddr4"],
+
+  "preferred_keywords": ["3200", "2x8", "dual channel", "2 x 8"],
+
   "excluded_keywords": [
+    "neispravno",
+    "za dijelove",
+    "ne radi",
     "laptop",
-    "neispravno"
+    "notebook",
+    "so-dimm",
+    "sodimm",
+    "4x4", "4 x 4"
   ],
-  "min_speed_mhz": null,
-  "single_stick_max_price_km": null,
+
+  "min_speed_mhz": 3000,
+
+  "_komentar_single_stick": "Pojedinačan 1x16GB štapić (nije dual-channel par) se prihvata SAMO ako mu je cijena do ovog iznosa - inače se odbacuje bez obzira na ostale kriterije.",
+  "single_stick_max_price_km": 71,
+
   "use_vision_fallback": true,
-  "telegram_chat_id": "7791159132"
+
+  "telegram_enabled": true
 }
