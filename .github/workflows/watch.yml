@@ -37,11 +37,13 @@ jobs:
               "https://olx.ba/pretraga?attr=3228323032352d32303236293a3532284d616e75656c6e6929&attr_encoded=1&category_id=18&price_from=50000&price_to=65000"
           ]
 
-          headers = {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-              "Accept-Language": "bs-BA,bs;q=0.9,en-US;q=0.8,en;q=0.7",
-          }
+         headers = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "bs,hr,sr,en;q=0.8",
+}
 
           for url in urls:
               print("\n========================================")
