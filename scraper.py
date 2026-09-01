@@ -151,7 +151,7 @@ def validate_safe_path(username):
     return True
 
 
-
+def build_listing_url(listing_id, title=None):
     """Konstruiše URL ka pojedinačnom oglasu. Potvrđeno stvaran format: olx.ba/artikal/<id>"""
     return f"https://olx.ba/artikal/{listing_id}"
 
