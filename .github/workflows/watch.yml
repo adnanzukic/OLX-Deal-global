@@ -1,10 +1,10 @@
 name: OLX RAM Watcher
 
 on:
-  workflow_dispatch: {}  # pokreće se preko vanjskog cron-job.org okidača
+  workflow_dispatch: {}  # pokreće se ručno ili preko cron-job.org
 
 permissions:
-  contents: write  # potrebno da bot može sačuvati ažurirano stanje
+  contents: write
 
 jobs:
   check-olx:
@@ -37,13 +37,18 @@ jobs:
               "https://olx.ba/pretraga?attr=3228323032352d32303236293a3532284d616e75656c6e6929&attr_encoded=1&category_id=18&price_from=50000&price_to=65000"
           ]
 
-         headers = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept-Language": "bs,hr,sr,en;q=0.8",
-}
+          headers = {
+              "User-Agent": (
+                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                  "AppleWebKit/537.36 (KHTML, like Gecko) "
+                  "Chrome/131.0.0.0 Safari/537.36"
+              ),
+              "Accept": (
+                  "text/html,application/xhtml+xml,application/xml;"
+                  "q=0.9,image/avif,image/webp,*/*;q=0.8"
+              ),
+              "Accept-Language": "bs-BA,bs;q=0.9,en-US;q=0.8,en;q=0.7",
+          }
 
           for url in urls:
               print("\n========================================")
@@ -66,16 +71,29 @@ jobs:
                   print("\nPRVIH 500 ZNAKOVA ODGOVORA:\n")
                   print(response.text[:500])
 
+                  response.raise_for_status()
+
               except Exception as e:
                   print("GREŠKA:", repr(e))
+                  raise
+
+      - name: Pokreni OLX scraper
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python scraper.py
 
       - name: Sačuvaj ažurirano stanje nazad u repozitorij
         run: |
           git config user.name "olx-watcher-bot"
           git config user.email "actions@github.com"
+
           git add users/
+
           if ! git diff --staged --quiet; then
             git commit -m "Ažuriranje stanja oglasa [automatski]"
-            git pull --rebase
-            git push
+            git pull --rebase origin main
+            git push origin main
+          else
+            echo "Nema promjena za commit."
           fi
