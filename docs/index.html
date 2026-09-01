@@ -518,12 +518,25 @@
     document.getElementById("editingWatchId").value = "";
   }
 
-  function openModal(watchId = null) {
+  async function openModal(watchId = null) {
     document.getElementById("watchModal").classList.add("show");
     if (watchId) {
       document.getElementById("modalTitle").textContent = "Uredi praćenje";
-      const watch = watches.find(w => w.id === watchId);
-      if (watch) fillFormFromWatch(watch);
+      // Load full watch details from API
+      try {
+        const resp = await fetch(`${WORKER_URL}/api/watches/${watchId}?user=${encodeURIComponent(currentUser)}`);
+        const data = await resp.json();
+        if (data.exists && data.watch) {
+          fillFormFromWatch(data.watch);
+        } else {
+          const watch = watches.find(w => w.id === watchId);
+          if (watch) fillFormFromWatch(watch);
+        }
+      } catch (e) {
+        console.error("Greška pri učitavanju watcha:", e);
+        const watch = watches.find(w => w.id === watchId);
+        if (watch) fillFormFromWatch(watch);
+      }
     } else {
       document.getElementById("modalTitle").textContent = "Novo praćenje";
       document.getElementById("watchForm").reset();

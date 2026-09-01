@@ -587,6 +587,12 @@ def migrate_user_to_multi_watch(user_dir):
         watch_id = "default"
     
     watch_dir = watches_dir / watch_id
+    
+    # Ako watch već postoji, ne prepisujem (idempotencija)
+    if watch_dir.exists() and (watch_dir / "criteria.json").exists():
+        log.info(f"[{username}][{watch_id}] Watch direktorij već postoji - ne prepisujem.")
+        return False
+    
     watch_dir.mkdir(parents=True, exist_ok=True)
     
     # Dodaj "active": true u criteria ako već ne postoji
@@ -611,6 +617,7 @@ def migrate_user_to_multi_watch(user_dir):
     
     log.info(f"[{username}] ✓ Migracija završena. Novo: users/{username}/watches/{watch_id}/")
     return True
+
 
 
 # ---------------------------------------------------------------------------

@@ -170,8 +170,12 @@ async function handleGetWatches(url, env) {
 }
 
 async function handleGetWatch(url, env) {
+  // Extract watch_id from path: /api/watches/{watchId}
+  const pathMatch = url.pathname.match(/^\/api\/watches\/([^/]+)$/);
+  const watchId = pathMatch ? pathMatch[1] : url.searchParams.get("watch_id");
+  
+  // Extract user from query param
   const userSlug = slugify(url.searchParams.get("user"));
-  const watchId = url.searchParams.get("watch_id");
   
   if (!userSlug || !watchId) {
     return json({ error: "Nedostaju 'user' ili 'watch_id' parametri." }, 400);
@@ -241,8 +245,12 @@ async function handlePostWatch(request, env) {
 
 async function handlePutWatch(url, request, env) {
   const body = await request.json();
+  
+  // Extract watch_id from path: /api/watches/{watchId}
+  const pathMatch = url.pathname.match(/^\/api\/watches\/([^/]+)$/);
+  const watchId = pathMatch ? pathMatch[1] : url.searchParams.get("watch_id");
+  
   const userSlug = slugify(body.user);
-  const watchId = url.searchParams.get("watch_id");
   
   if (!userSlug || !watchId) {
     return json({ error: "Nedostaju 'user' ili 'watch_id' parametri." }, 400);
@@ -282,8 +290,12 @@ async function handlePutWatch(url, request, env) {
 
 async function handleDeleteWatch(url, request, env) {
   const body = await request.json();
+  
+  // Extract watch_id from path: /api/watches/{watchId}
+  const pathMatch = url.pathname.match(/^\/api\/watches\/([^/]+)$/);
+  const watchId = pathMatch ? pathMatch[1] : url.searchParams.get("watch_id");
+  
   const userSlug = slugify(body.user || url.searchParams.get("user"));
-  const watchId = url.searchParams.get("watch_id");
   
   if (!userSlug || !watchId) {
     return json({ error: "Nedostaju 'user' ili 'watch_id' parametri." }, 400);
@@ -316,8 +328,12 @@ async function handleDeleteWatch(url, request, env) {
 
 async function handleToggleWatch(url, request, env) {
   const body = await request.json();
+  
+  // Extract watch_id from path: /api/watches/{watchId}/toggle
+  const pathMatch = url.pathname.match(/^\/api\/watches\/([^/]+)\/toggle$/);
+  const watchId = pathMatch ? pathMatch[1] : url.searchParams.get("watch_id");
+  
   const userSlug = slugify(body.user);
-  const watchId = url.searchParams.get("watch_id");
   
   if (!userSlug || !watchId) {
     return json({ error: "Nedostaju 'user' ili 'watch_id' parametri." }, 400);
