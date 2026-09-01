@@ -49,9 +49,10 @@ USERS_DIR = BASE_DIR / "users"
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
     ),
-    "Accept-Language": "bs,hr,sr,en;q=0.8",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "bs-BA,bs;q=0.9,en-US;q=0.8,en;q=0.7",
 }
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
@@ -543,32 +544,107 @@ def determine_match(listing, criteria):
 
 
 # ---------------------------------------------------------------------------
-# Glavna logika - MULTI-USER: obradi svakog korisnika ponaosob
+# Migracija: stara struktura (jedan watch po korisniku) -> nova (više watchesa)
 # ---------------------------------------------------------------------------
 
-def process_user(user_dir):
-    """Obradi jednog korisnika - vrati broj poslanih obavijesti."""
+def migrate_user_to_multi_watch(user_dir):
+    """
+    Ako korisnik ima staru strukturu (criteria.json na razini users/<user>/),
+    migruiraj ga na novu strukturu (criteria.json u users/<user>/watches/<watch_id>/).
+    
+    Strategija:
+    - Ako users/<user>/criteria.json postoji i users/<user>/watches/ NE postoji:
+      - Koristi display_name ili "default" kao watch_id (slugify)
+      - Premjesti criteria.json u users/<user>/watches/<watch_id>/criteria.json
+      - Premjesti seen_listings.json u users/<user>/watches/<watch_id>/seen_listings.json
+      - Dodaj "active": true u criteria
+    - Migracija je idempotentna (može se pokrenuti više puta bez štete)
+    """
     username = user_dir.name
-    criteria_path = user_dir / "criteria.json"
-    state_path = user_dir / "seen_listings.json"
+    old_criteria_path = user_dir / "criteria.json"
+    old_state_path = user_dir / "seen_listings.json"
+    watches_dir = user_dir / "watches"
+    
+    # Ako stara struktura ne postoji, nema šta migrirati
+    if not old_criteria_path.exists():
+        return False
+    
+    # Ako nova struktura već postoji, migracija je već obavljena
+    if watches_dir.exists() and any(watches_dir.iterdir()):
+        log.info(f"[{username}] Već je migrirano - nema ništa za obaviti.")
+        return False
+    
+    # Učitaj stare datoteke
+    old_criteria = load_json(old_criteria_path, {})
+    if not old_criteria:
+        log.warning(f"[{username}] Stara criteria.json postoji ali je prazan ili nevalidan - preskačem migraciju.")
+        return False
+    
+    # Nappravi watch_id od display_name ili koristi default
+    watch_name = old_criteria.get("display_name", username)
+    watch_id = slugify(watch_name)
+    if not watch_id:
+        watch_id = "default"
+    
+    watch_dir = watches_dir / watch_id
+    watch_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Dodaj "active": true u criteria ako već ne postoji
+    if "active" not in old_criteria:
+        old_criteria["active"] = True
+    
+    # Spremi migriranu criteria
+    new_criteria_path = watch_dir / "criteria.json"
+    save_json(new_criteria_path, old_criteria)
+    log.info(f"[{username}][{watch_id}] Premješten criteria.json.")
+    
+    # Spremi migriranu state (seen_listings) ako postoji
+    if old_state_path.exists():
+        old_state = load_json(old_state_path, {})
+        new_state_path = watch_dir / "seen_listings.json"
+        save_json(new_state_path, old_state)
+        log.info(f"[{username}][{watch_id}] Premješten seen_listings.json ({len(old_state)} stavki).")
+    else:
+        # Kreiraj prazan seen_listings
+        new_state_path = watch_dir / "seen_listings.json"
+        save_json(new_state_path, {})
+    
+    log.info(f"[{username}] ✓ Migracija završena. Novo: users/{username}/watches/{watch_id}/")
+    return True
+
+
+# ---------------------------------------------------------------------------
+# Glavna logika - MULTI-WATCH: obradi svakog korisnika i sve njegove watchese
+# ---------------------------------------------------------------------------
+
+def process_watch(user_dir, watch_dir, watch_id):
+    """Obradi jedan watch - vrati broj poslanih obavijesti."""
+    username = user_dir.name
+    criteria_path = watch_dir / "criteria.json"
+    state_path = watch_dir / "seen_listings.json"
 
     criteria = load_json(criteria_path, {})
     if not criteria:
-        log.warning(f"[{username}] Nema criteria.json ili je prazan - preskačem.")
+        log.warning(f"[{username}][{watch_id}] Nema criteria.json ili je prazan - preskačem.")
+        return 0
+
+    # Provjeri da li je watch aktivan
+    if not criteria.get("active", True):
+        log.info(f"[{username}][{watch_id}] Pauzirano - preskačem.")
         return 0
 
     chat_id = criteria.get("telegram_chat_id")
     if not chat_id:
-        log.warning(f"[{username}] Nema podešen telegram_chat_id - preskačem.")
+        log.warning(f"[{username}][{watch_id}] Nema podešen telegram_chat_id - preskačem.")
         return 0
 
     search_url = criteria.get("search_url")
     if not search_url:
-        log.warning(f"[{username}] Nema search_url - preskačem.")
+        log.warning(f"[{username}][{watch_id}] Nema search_url - preskačem.")
         return 0
 
-    display_name = criteria.get("display_name", username)
-    log.info(f"=== Obrađujem korisnika: {display_name} ===")
+    display_name = criteria.get("display_name", watch_id)
+    log.info(f"=== [{username}] Obrađujem watch: {display_name} ===")
 
     state = load_json(state_path, {})
     listings = fetch_search_results(search_url)
@@ -597,8 +673,11 @@ def process_user(user_dir):
             reason = "new" if matched else None
 
         if reason:
-            log.info(f"[{username}] MATCH ({reason}): {listing['title']} - {listing['price']} KM")
-            send_telegram_message(chat_id, format_notification(listing, reason))
+            log.info(f"[{username}][{watch_id}] MATCH ({reason}): {listing['title']} - {listing['price']} KM")
+            # Dodaj naziv watcha u notifikaciju
+            watch_name_emoji = f"👁️ <b>{display_name}</b>\n\n" if display_name != watch_id else ""
+            telegram_text = watch_name_emoji + format_notification(listing, reason)
+            send_telegram_message(chat_id, telegram_text)
             notified_count += 1
             time.sleep(1)
 
@@ -610,8 +689,39 @@ def process_user(user_dir):
         }
 
     save_json(state_path, state)
-    log.info(f"[{username}] Gotovo. Poslano {notified_count} obavijesti. Praćeno oglasa: {len(state)}.")
+    log.info(f"[{username}][{watch_id}] Gotovo. Poslano {notified_count} obavijesti. Praćeno oglasa: {len(state)}.")
     return notified_count
+
+
+def process_user(user_dir):
+    """Obradi jednog korisnika - svi njegovi watchesi. Vrati broj poslanih obavijesti."""
+    username = user_dir.name
+    total_notified = 0
+    
+    # Migruiraj ako je potrebno
+    migrate_user_to_multi_watch(user_dir)
+    
+    # Obradi sve watchese u korisnikovom direktoriju
+    watches_dir = user_dir / "watches"
+    if not watches_dir.exists():
+        log.warning(f"[{username}] Nema watches/ direktorija - nema što obraditi.")
+        return 0
+    
+    watch_dirs = sorted([d for d in watches_dir.iterdir() if d.is_dir() and (d / "criteria.json").exists()])
+    if not watch_dirs:
+        log.warning(f"[{username}] Nema nijednog validnog watcha u watches/ - nema što obraditi.")
+        return 0
+    
+    for watch_dir in watch_dirs:
+        watch_id = watch_dir.name
+        try:
+            watch_notifications = process_watch(user_dir, watch_dir, watch_id)
+            total_notified += watch_notifications
+        except Exception as e:
+            log.error(f"[{username}][{watch_id}] Greška pri obradi watcha: {e}")
+            # Nastavi sa sljedećim watchem - jedna greška ne zaustavlja sve ostale
+    
+    return total_notified
 
 
 def main():
@@ -619,20 +729,25 @@ def main():
         log.warning("users/ folder još ne postoji - vjerovatno se niko još nije prijavio preko obrasca. Prekidam bez greške.")
         return
 
-    user_dirs = [d for d in USERS_DIR.iterdir() if d.is_dir() and (d / "criteria.json").exists()]
+    user_dirs = sorted([d for d in USERS_DIR.iterdir() if d.is_dir()])
 
     if not user_dirs:
         log.warning("Nema nijednog korisnika u users/ folderu - ništa za obraditi.")
         return
 
     total_notified = 0
+    processed_users = 0
+    
     for user_dir in user_dirs:
         try:
-            total_notified += process_user(user_dir)
+            user_notified = process_user(user_dir)
+            if user_notified > 0 or (user_dir / "watches").exists():
+                total_notified += user_notified
+                processed_users += 1
         except Exception as e:
-            log.error(f"[{user_dir.name}] Neočekivana greška: {e}")
+            log.error(f"[{user_dir.name}] Neočekivana greška pri obradi korisnika: {e}")
 
-    log.info(f"=== Sve gotovo. Obrađeno korisnika: {len(user_dirs)}. Ukupno poslano obavijesti: {total_notified}. ===")
+    log.info(f"=== Sve gotovo. Obrađeno korisnika: {processed_users}. Ukupno poslano obavijesti: {total_notified}. ===")
 
 
 if __name__ == "__main__":
