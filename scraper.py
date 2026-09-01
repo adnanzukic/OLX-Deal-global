@@ -512,10 +512,22 @@ def analyze_images_with_gemini(image_urls):
 # ---------------------------------------------------------------------------
 
 def send_telegram_message(chat_id, text):
+    """
+    Pošalji Telegram poruku.
+    
+    Vraća True ako je poruka uspješno poslana (Telegram API potvrdi).
+    Vraća False ako:
+    - Token ili chat_id nedostaju
+    - API zahtjev neuspješan
+    - API vraća grešku
+    - Bilo koja greška se dogodi
+    
+    Samo ako se vraća True, je sigurno da korisnik može vidjeti poruku.
+    """
     if not TELEGRAM_BOT_TOKEN or not chat_id:
         log.warning("Telegram nije podešen (nedostaje token ili chat_id) - ispisujem u log umjesto slanja:")
         log.info(text)
-        return
+        return False
 
     api_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
@@ -528,8 +540,10 @@ def send_telegram_message(chat_id, text):
         r = requests.post(api_url, data=payload, timeout=15)
         r.raise_for_status()
         log.info("Telegram poruka poslana.")
+        return True
     except Exception as e:
         log.error(f"Greška pri slanju Telegram poruke: {e}")
+        return False
 
 
 def format_notification(listing, reason):
@@ -737,24 +751,38 @@ def process_watch(user_dir, watch_dir, watch_id):
                 # Dodaj naziv watcha u notifikaciju
                 watch_name_emoji = f"👁️ <b>{display_name}</b>\n\n" if display_name != watch_id else ""
                 telegram_text = watch_name_emoji + format_notification(listing, reason)
-                send_telegram_message(chat_id, telegram_text)
-                notified_count += 1
-                time.sleep(1)
-
-            # KLJUČNO: Ažuriraj state ODMAH nakon što smo obradili oglas
-            # (bilo da je bilo razlogom za notifikaciju ili ne).
-            # Ako se dogodi greška u sljedećem oglasu, ovaj je već sigurno pohranjen.
-            state[listing_id] = {
-                "price": listing["price"],
-                "title": listing["title"],
-                "url": listing["url"],
-                "matched": matched,
-            }
-            
-            # Persisti state nakon svakog oglasa da izbjegnemo gubitak podataka
-            # ako se dogodi greška kasnije. Overhead od GitHub API-ja je prihvatljiv
-            # za sigurnost da nema duplikata.
-            save_json(state_path, state)
+                
+                # KLJUČNO: Provjeri je li Telegram poruka stvarno poslana
+                telegram_success = send_telegram_message(chat_id, telegram_text)
+                
+                # Samo ako je Telegram poruka uspješno poslana, markiraj oglas kao viđen
+                if telegram_success:
+                    notified_count += 1
+                    time.sleep(1)
+                    
+                    # Spremi oglas kao viđen jer znamo da je korisnik dobio notifikaciju
+                    state[listing_id] = {
+                        "price": listing["price"],
+                        "title": listing["title"],
+                        "url": listing["url"],
+                        "matched": matched,
+                    }
+                    save_json(state_path, state)
+                else:
+                    # Telegram neuspješan - ne markiraj kao viđen
+                    # Sljedeći run će pokušati ponovno
+                    log.warning(f"[{username}][{watch_id}] Telegram nije poslao poruku za {listing_id} - oglas će biti pokušan u sljedećem run-u.")
+                    continue
+            else:
+                # Oglas ne odgovara kriterijima - markiraj kao viđen s matched=false
+                # (bez obzira na Telegram jer nema što slati)
+                state[listing_id] = {
+                    "price": listing["price"],
+                    "title": listing["title"],
+                    "url": listing["url"],
+                    "matched": matched,
+                }
+                save_json(state_path, state)
 
         except Exception as e:
             # Greška u obradi jednog oglasa ne zaustavlja obradu ostalih
