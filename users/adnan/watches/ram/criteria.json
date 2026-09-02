@@ -11,7 +11,9 @@
   "required_keywords_all": [],
   "excluded_keywords": [
     "laptop",
-    "neispravno"
+    "neispravno",
+    "4x4",
+    "4 x 4"
   ],
   "min_speed_mhz": 3000,
   "single_stick_max_price_km": null,
