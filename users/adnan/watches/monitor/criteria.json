@@ -13,7 +13,13 @@
   "excluded_keywords": [
     "neispravno",
     "polomljeno",
-    "slomljeno"
+    "slomljeno",
+    "75Hz",
+    "60Hz",
+    "100Hz",
+    "144Hz",
+    "120Hz",
+    "165Hz"
   ],
   "min_speed_mhz": null,
   "single_stick_max_price_km": null,
