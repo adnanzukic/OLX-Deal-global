@@ -33,14 +33,28 @@
   }
 
   body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
     background-image:
-      radial-gradient(circle at 20% -10%, rgba(255, 138, 61, 0.08), transparent 45%);
+      radial-gradient(circle at 20% -10%, rgba(255, 138, 61, 0.08), transparent 45%),
+      radial-gradient(circle at 100% 30%, rgba(255, 138, 61, 0.04), transparent 40%);
+    background-attachment: fixed;
+  }
+
+  /* Stranica se sad ponaša kao prava, uravnotežena cjelina: sadržaj
+     centriran, footer uvijek pri dnu (bilo da ima malo ili puno sadržaja),
+     odvojen tankom linijom umjesto da "visi" odmah ispod forme. */
+  main {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    padding: 64px 24px 48px;
   }
 
   .wrap {
     max-width: 640px;
-    margin: 0 auto;
-    padding: 64px 24px 96px;
+    width: 100%;
   }
 
   /* --- Hero / signature element --- */
@@ -193,6 +207,19 @@
     font-size: 12.5px;
   }
 
+  .btn-back {
+    background: none;
+    border: none;
+    color: var(--muted);
+    padding: 0;
+    font-size: 13.5px;
+    margin-bottom: 24px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-back:hover { color: var(--text); border-color: transparent; }
+
   hr {
     border: none;
     border-top: 1px solid var(--border);
@@ -315,64 +342,47 @@
     border: 1px solid var(--border);
   }
 
-  /* --- Modal --- */
-  .modal {
+  h2.section-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 16px;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+
+  /* --- Inline forma (zamjena za popup) ---
+     Umjesto fixed-overlay modala, forma je sad običan panel unutar iste
+     stranice - zamjenjuje listu praćenja dok je otvorena, bez odvojenog
+     "prozora". Djeluje kao prirodan nastavak stranice, ne kao prekid. */
+  .form-panel {
     display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    z-index: 1000;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
+  }
+  .form-panel.show {
+    display: block;
+    animation: fadeIn 0.2s ease;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
   }
 
-  .modal.show { display: flex; }
-
-  .modal-content {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 32px;
-    max-width: 640px;
-    width: 100%;
-    max-height: 90vh;
-    overflow-y: auto;
-    position: relative;
-  }
-
-  .modal-header {
+  .panel-header {
     font-size: 20px;
     font-weight: 600;
     margin-bottom: 24px;
     font-family: 'Space Grotesk', sans-serif;
   }
 
-  .modal-close {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    background: none;
-    border: none;
-    color: var(--muted);
-    font-size: 24px;
-    cursor: pointer;
-    padding: 0;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .modal-close:hover { color: var(--text); }
-
+  /* --- Footer: suptilan, uvijek pri dnu, odvojen linijom --- */
   footer {
-    margin-top: 56px;
-    font-size: 12.5px;
-    color: #5c6070;
+    text-align: center;
+    padding: 20px 24px 28px;
+    border-top: 1px solid var(--border);
+  }
+  footer p {
+    margin: 0;
+    font-size: 12px;
+    color: #565a68;
+    letter-spacing: 0.01em;
   }
 
   .hidden { display: none !important; }
@@ -380,6 +390,7 @@
 </head>
 <body>
 
+<main>
 <div class="wrap">
 
   <div class="hero">
@@ -406,20 +417,17 @@
   <!-- WATCHES LIST -->
   <div id="watchesList" class="watches-list">
     <section>
-      <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 16px; font-family: Space Grotesk;">Moja praćenja</h2>
+      <h2 class="section-title">Moja praćenja</h2>
       <div id="watchesContainer"></div>
       <button type="button" class="btn-add" id="addWatchBtn">+ Dodaj novo praćenje</button>
     </section>
     <div id="listStatus" class="status"></div>
   </div>
 
-</div>
-
-<!-- MODAL FOR ADD/EDIT WATCH -->
-<div id="watchModal" class="modal">
-  <div class="modal-content">
-    <button type="button" class="modal-close" id="modalCloseBtn">✕</button>
-    <div class="modal-header" id="modalTitle">Novo praćenje</div>
+  <!-- INLINE FORM PANEL (zamjena za popup) -->
+  <div id="watchFormPanel" class="form-panel">
+    <button type="button" class="btn-back" id="backBtn">← Nazad na praćenja</button>
+    <div class="panel-header" id="panelTitle">Novo praćenje</div>
 
     <form id="watchForm">
       <input type="hidden" id="editingWatchId">
@@ -491,9 +499,11 @@
       <div id="formStatus" class="status"></div>
     </form>
   </div>
-</div>
 
-<footer>OLX Deal Watcher &middot; provjerava svakih 30 minuta &middot; besplatno, u pozadini</footer>
+</div>
+</main>
+
+<footer><p>OLX Deal Watcher &middot; provjerava svakih 30 minuta &middot; besplatno, u pozadini</p></footer>
 
 <script>
   const WORKER_URL = "https://olx-deal-watcher.adnan69zukic.workers.dev";
@@ -512,17 +522,26 @@
     el.className = "status show " + (ok ? "ok" : "err");
   }
 
-  function closeModal() {
-    document.getElementById("watchModal").classList.remove("show");
-    document.getElementById("watchForm").reset();
-    document.getElementById("editingWatchId").value = "";
+  function scrollToTop() {
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  async function openModal(watchId = null) {
-    document.getElementById("watchModal").classList.add("show");
+  // ============ INLINE FORM PANEL (zamjena za popup) ============
+  function closeForm() {
+    document.getElementById("watchFormPanel").classList.remove("show");
+    document.getElementById("watchesList").classList.add("show");
+    document.getElementById("watchForm").reset();
+    document.getElementById("editingWatchId").value = "";
+    scrollToTop();
+  }
+
+  async function openForm(watchId = null) {
+    document.getElementById("watchesList").classList.remove("show");
+    document.getElementById("watchFormPanel").classList.add("show");
+    scrollToTop();
+
     if (watchId) {
-      document.getElementById("modalTitle").textContent = "Uredi praćenje";
-      // Load full watch details from API
+      document.getElementById("panelTitle").textContent = "Uredi praćenje";
       try {
         const resp = await fetch(`${WORKER_URL}/api/watches/${watchId}?user=${encodeURIComponent(currentUser)}`);
         const data = await resp.json();
@@ -538,7 +557,7 @@
         if (watch) fillFormFromWatch(watch);
       }
     } else {
-      document.getElementById("modalTitle").textContent = "Novo praćenje";
+      document.getElementById("panelTitle").textContent = "Novo praćenje";
       document.getElementById("watchForm").reset();
     }
     document.getElementById("editingWatchId").value = watchId || "";
@@ -620,14 +639,13 @@
       </div>
     `).join("");
 
-    // Attach event listeners
     container.querySelectorAll("[data-action]").forEach(btn => {
       btn.addEventListener("click", async (e) => {
         e.preventDefault();
         const action = btn.dataset.action;
         const watchId = btn.dataset.watch;
 
-        if (action === "edit") openModal(watchId);
+        if (action === "edit") openForm(watchId);
         else if (action === "delete") await deleteWatch(watchId);
         else if (action === "toggle") await toggleWatch(watchId);
       });
@@ -636,7 +654,7 @@
 
   // ============ ADD WATCH ============
   document.getElementById("addWatchBtn").addEventListener("click", () => {
-    openModal();
+    openForm();
   });
 
   // ============ FORM SUBMISSION ============
@@ -676,10 +694,10 @@
       const data = await resp.json();
       if (resp.ok) {
         showStatus(document.getElementById("formStatus"), "Sačuvano!", true);
-        setTimeout(() => {
-          closeModal();
-          document.getElementById("loadWatchesBtn").click();
-        }, 800);
+        setTimeout(async () => {
+          await reloadWatches();
+          closeForm();
+        }, 700);
       } else {
         showStatus(document.getElementById("formStatus"), data.error || "Nešto nije uspjelo", false);
       }
@@ -690,6 +708,19 @@
       submitBtn.textContent = "Sačuvaj praćenje";
     }
   });
+
+  async function reloadWatches() {
+    try {
+      const resp = await fetch(`${WORKER_URL}/api/watches?user=${encodeURIComponent(currentUser)}`);
+      const data = await resp.json();
+      if (resp.ok) {
+        watches = data.watches || [];
+        renderWatches();
+      }
+    } catch (e) {
+      console.error("Greška pri ponovnom učitavanju:", e);
+    }
+  }
 
   // ============ DELETE WATCH ============
   async function deleteWatch(watchId) {
@@ -703,7 +734,7 @@
       });
 
       if (resp.ok) {
-        document.getElementById("loadWatchesBtn").click();
+        await reloadWatches();
       } else {
         const data = await resp.json();
         showStatus(document.getElementById("listStatus"), data.error || "Greška pri brisanju", false);
@@ -723,7 +754,7 @@
       });
 
       if (resp.ok) {
-        document.getElementById("loadWatchesBtn").click();
+        await reloadWatches();
       } else {
         const data = await resp.json();
         showStatus(document.getElementById("listStatus"), data.error || "Greška", false);
@@ -758,11 +789,8 @@
     }
   });
 
-  // ============ MODAL CONTROLS ============
-  document.getElementById("modalCloseBtn").addEventListener("click", closeModal);
-  document.getElementById("watchModal").addEventListener("click", (e) => {
-    if (e.target.id === "watchModal") closeModal();
-  });
+  // ============ NAZAD DUGME ============
+  document.getElementById("backBtn").addEventListener("click", closeForm);
 </script>
 
 </body>
