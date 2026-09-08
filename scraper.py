@@ -39,6 +39,16 @@ MIGRACIJA I ATOMIČNOST:
 - Seen state: Persisti se NAKON svakog procesiranog oglasa (ne samo na kraju)
   => Ako se greška dogodi, već obradeni oglasi su sigurno pohrani, nema duplikata
 - Ako jedan oglas uzrokuje grešku, ostali oglasi se nastavljaju obrađivati
+
+GENERIČKI KRITERIJI (ne samo RAM):
+- min_value / min_value_unit: generička "minimalna vrijednost + jedinica"
+  (npr. 180 + "Hz" za monitore, 3200 + "MHz" za RAM, itd.) - zamjenjuje
+  stari, RAM-specifičan min_speed_mhz (koji se i dalje podržava radi
+  kompatibilnosti sa već sačuvanim watchevima)
+- special_keyword / special_keyword_max_price_km: generička "ako oglas
+  sadrži OVU riječ, primijeni OVAJ poseban (obično niži) cjenovni prag"
+  (npr. "1x16" za pojedinačan RAM štapić, ili bilo šta drugo za bilo koju
+  drugu kategoriju) - zamjenjuje stari single_stick_max_price_km
 """
 
 
@@ -370,67 +380,90 @@ def _save_debug_snapshot(html, filename="last_page_debug.html"):
 # Provjera kriterija (tekst)
 # ---------------------------------------------------------------------------
 
+def _keyword_matches(keyword, norm_text, norm_text_nospace):
+    """Provjeri da li se ključna riječ nalazi u tekstu, TOLERANTNO na
+    razlike u razmacima u BILO KOM smjeru (npr. '144Hz' == '144 Hz',
+    '2x8' == '2 x 8', '3200MHz' == '3200 MHz') - ovo generalno rješava sve
+    varijante razmaka, ne samo one oko slova 'x' kao ranije.
+    """
+    kw_norm = normalize_text(keyword)
+    kw_nospace = re.sub(r"\s+", "", kw_norm)
+    return kw_norm in norm_text or kw_nospace in norm_text_nospace
+
+
 def text_matches_criteria(text, criteria, price=None):
     """Vrati (matched: bool, confident: bool).
     matched = da li tekst zadovoljava obavezne uslove
-    confident = da li smo SIGURNI (npr. brzina eksplicitno piše) ili treba
-                dodatna provjera (opis / slika)
+    confident = da li smo SIGURNI (npr. vrijednost eksplicitno piše) ili
+                treba dodatna provjera (opis / slika)
     """
     norm = normalize_text(text)
-    # Kompaktna verzija bez razmaka oko 'x' (hvata "2x8", "2x 8", "2 x8", "2 x 8" - sve isto)
-    norm_compact = re.sub(r"\s*x\s*", "x", norm)
+    # Verzija BEZ IKAKVIH razmaka - opšte rješenje za sve varijante razmaka
+    # (zamjenjuje stariju verziju koja je hvatala razmake samo oko 'x')
+    norm_nospace = re.sub(r"\s+", "", norm)
 
     for bad_word in criteria.get("excluded_keywords", []):
-        bad_norm = normalize_text(bad_word)
-        bad_compact = re.sub(r"\s*x\s*", "x", bad_norm)
-        if bad_norm in norm or bad_compact in norm_compact:
+        if _keyword_matches(bad_word, norm, norm_nospace):
             return False, True  # isključeno, i sigurni smo u to
 
     all_required = criteria.get("required_keywords_all", [])
-    if not all(normalize_text(kw) in norm for kw in all_required):
+    if not all(_keyword_matches(kw, norm, norm_nospace) for kw in all_required):
         return False, False  # nedostaje obavezan ključni pojam, nismo 100% sigurni (možda piše drugačije)
 
     any_required = criteria.get("required_keywords_any", [])
     if any_required:
-        found = any(
-            normalize_text(kw) in norm or re.sub(r"\s*x\s*", "x", normalize_text(kw)) in norm_compact
-            for kw in any_required
-        )
+        found = any(_keyword_matches(kw, norm, norm_nospace) for kw in any_required)
         if not found:
             return False, False
 
-    # Poseban slučaj: pojedinačan 1x16GB štapić (single-channel, nije par) -
-    # prihvatljiv SAMO ako mu je cijena unutar posebnog, nižeg praga (jer
-    # nema dual-channel prednost koju inače tražimo).
-    single_stick_patterns = ["1x16"]
-    is_single_stick = any(p in norm_compact for p in single_stick_patterns)
-    if is_single_stick:
-        single_max = criteria.get("single_stick_max_price_km")
-        if single_max is not None:
+    # --- GENERIČKI poseban slučaj: "ako sadrži OVU riječ, primijeni OVAJ
+    # poseban cjenovni prag" - npr. pojedinačan RAM štapić (1x16) treba
+    # niži prag jer nema dual-channel prednost, ali ovo radi za BILO KOJU
+    # kategoriju/riječ, ne samo RAM.
+    # (podržava i stari naziv polja 'single_stick_max_price_km' radi
+    # kompatibilnosti sa već sačuvanim watchevima od prije generalizacije)
+    special_keyword = criteria.get("special_keyword")
+    special_max_price = criteria.get("special_keyword_max_price_km")
+    if not special_keyword and criteria.get("single_stick_max_price_km") is not None:
+        special_keyword = "1x16"
+        special_max_price = criteria.get("single_stick_max_price_km")
+
+    if special_keyword and special_max_price is not None:
+        if _keyword_matches(special_keyword, norm, norm_nospace):
             if price is None:
                 # Ne znamo cijenu u ovom pozivu (npr. provjera samog naslova
                 # prije nego smo sigurni o čemu se radi) - ne možemo još
                 # potvrditi, tražimo dalje potvrdu.
                 return True, False
-            if price > single_max:
-                return False, True  # prekoračio poseban prag za pojedinačan štapić, sigurni smo
+            if price > special_max_price:
+                return False, True  # prekoračio poseban prag, sigurni smo
 
-    # Provjeri brzinu (npr. "3200" mora se pojaviti da smo sigurni da je dovoljno brz)
-    min_speed = criteria.get("min_speed_mhz")
-    if min_speed:
-        speed_match = re.search(r"(\d{4})\s*mhz|\b(\d{4})\b", norm)
-        if speed_match:
-            found_speed = int(speed_match.group(1) or speed_match.group(2))
-            if found_speed < min_speed:
-                return False, True  # eksplicitno prespora, sigurni smo
-            return True, True  # eksplicitno dovoljno brza, sigurni smo
+    # --- GENERIČKA provjera minimalne vrijednosti + jedinice (npr. "180 Hz"
+    # za monitore, "3200 MHz" za RAM, ili bilo šta drugo sa brojem+jedinicom).
+    # (podržava i stari naziv polja 'min_speed_mhz' radi kompatibilnosti sa
+    # već sačuvanim RAM watchevima od prije generalizacije - tretira se kao
+    # min_value=<ta vrijednost>, min_value_unit="MHz")
+    min_value = criteria.get("min_value")
+    unit = criteria.get("min_value_unit")
+    if min_value is None and criteria.get("min_speed_mhz") is not None:
+        min_value = criteria.get("min_speed_mhz")
+        unit = unit or "MHz"
+
+    if min_value and unit:
+        unit_norm = normalize_text(unit)
+        pattern = re.compile(r"(\d+)\s*" + re.escape(unit_norm), re.IGNORECASE)
+        match = pattern.search(norm)
+        if match:
+            found_value = int(match.group(1))
+            if found_value < min_value:
+                return False, True  # eksplicitno ispod minimuma, sigurni smo
+            return True, True  # eksplicitno dovoljno, sigurni smo
         else:
-            # Brzina se ne pominje eksplicitno u tekstu - NE tretiramo ovo
-            # kao "vjerovatno odgovara" (to je dovodilo do lažnih pozitivnih
-            # obavijesti), nego kao "još nepotvrđeno". Pozivalac (determine_match)
-            # će pokušati potvrditi kroz opis oglasa i/ili sliku; ako ni to ne
-            # uspije, ostaje "ne odgovara" - bolje propustiti nesiguran oglas
-            # nego slati pogrešne obavijesti.
+            # Vrijednost (npr. Hz/MHz) se ne pominje eksplicitno u tekstu -
+            # NE tretiramo ovo kao "vjerovatno odgovara" (dovodilo je do
+            # lažnih pozitivnih obavijesti), nego kao "još nepotvrđeno".
+            # Pozivalac (determine_match) će pokušati potvrditi kroz opis
+            # oglasa i/ili sliku; ako ni to ne uspije, ostaje "ne odgovara".
             return False, False
 
     return True, True
@@ -442,14 +475,13 @@ def text_matches_criteria(text, criteria, price=None):
 
 def analyze_images_with_gemini(image_urls):
     """Preuzmi slike i zamoli Gemini vision model da PROČITA tekst sa
-    naljepnice na modulu (proizvođač, kapacitet, brzina, CAS latencija) i
-    vrati ga kao običan tekst - baš kao da je to prodavac napisao u opisu.
-    Namjerno NE donosimo odluku o poklapanju kriterija ovdje - taj tekst se
-    poslije provjerava kroz istu funkciju (text_matches_criteria) koja se
-    koristi i za naslov/opis, radi dosljednosti i manjeg rizika od greške
-    (model koji direktno odgovara "DA/NE" je skloniji nagađanju kad nije
-    siguran, dok prosto prepisivanje pročitanog teksta ostavlja manje
-    prostora za pogrešnu procjenu).
+    naljepnice/opisa na slici i vrati ga kao običan tekst - baš kao da je
+    to prodavac napisao u opisu. Namjerno NE donosimo odluku o poklapanju
+    kriterija ovdje - taj tekst se poslije provjerava kroz istu funkciju
+    (text_matches_criteria) koja se koristi i za naslov/opis, radi
+    dosljednosti i manjeg rizika od greške (model koji direktno odgovara
+    "DA/NE" je skloniji nagađanju kad nije siguran, dok prosto prepisivanje
+    pročitanog teksta ostavlja manje prostora za pogrešnu procjenu).
 
     Vrati string (može biti prazan ako ništa nije pročitljivo) ili None
     ako je došlo do greške / Gemini nije dostupan.
@@ -479,26 +511,25 @@ def analyze_images_with_gemini(image_urls):
             return None
 
         prompt = (
-            "Ovo su fotografije sa oglasa računarske komponente na OLX u "
-            "Bosni. NAJPRIJE provjeri da li se na slici stvarno vidi RAM "
-            "memorijski modul (ne SSD, ne HDD, ne neka druga komponenta). "
-            "Ako NIJE RAM modul, odgovori isključivo sa riječju 'NIJE_RAM'. "
-            "Ako JESTE RAM modul, pažljivo pročitaj SAMO tekst koji je "
-            "stvarno vidljiv na naljepnici modula (proizvođač, tip - "
-            "DDR3/DDR4/DDR5, kapacitet u GB, brzinu u MHz, CAS latenciju/CL "
-            "ako piše). Odgovori isključivo sa pročitanim specifikacijama u "
-            "kratkoj formi, npr: 'Kingston DDR4 8GB 3200MHz CL16'. Ako je na "
-            "slici više modula, navedi sve. Ako ne možeš pouzdano pročitati "
-            "neki podatak (nejasna slika, prekriven tekst, odsjaj), NEMOJ ga "
-            "pogađati niti pretpostavljati - jednostavno ga izostavi iz "
-            "odgovora. Ako ne možeš pročitati apsolutno ništa korisno sa "
-            "naljepnice, odgovori samo sa riječju 'NEČITKO'."
+            "Ovo su fotografije sa OLX oglasa u Bosni (može biti bilo koji "
+            "proizvod - elektronika, tehnika, dijelovi za vozila, itd). "
+            "Pažljivo pročitaj SAMO tekst/specifikacije koji su stvarno "
+            "vidljivi na slici (naljepnica, kutija, ekran uređaja, itd) - "
+            "proizvođač, model, ključne tehničke specifikacije (kapacitet, "
+            "brzina, frekvencija, dimenzije - šta god je relevantno i "
+            "vidljivo). Odgovori isključivo sa pročitanim informacijama u "
+            "kratkoj formi, npr: 'Samsung monitor 27 240Hz FullHD' ili "
+            "'Kingston DDR4 8GB 3200MHz CL16'. Ako ne možeš pouzdano "
+            "pročitati neki podatak (nejasna slika, prekriven tekst, "
+            "odsjaj), NEMOJ ga pogađati niti pretpostavljati - jednostavno "
+            "ga izostavi iz odgovora. Ako ne možeš pročitati apsolutno "
+            "ništa korisno sa slike, odgovori samo sa riječju 'NEČITKO'."
         )
 
         response = model.generate_content([prompt] + images)
         answer = (response.text or "").strip()
         log.info(f"Gemini vision je pročitao: {answer}")
-        if "NEČITKO" in answer.upper() or "NIJE_RAM" in answer.upper():
+        if "NEČITKO" in answer.upper():
             return ""
         return answer
 
