@@ -42,9 +42,6 @@
     background-attachment: fixed;
   }
 
-  /* Stranica se sad ponaša kao prava, uravnotežena cjelina: sadržaj
-     centriran, footer uvijek pri dnu (bilo da ima malo ili puno sadržaja),
-     odvojen tankom linijom umjesto da "visi" odmah ispod forme. */
   main {
     flex: 1;
     display: flex;
@@ -57,7 +54,6 @@
     width: 100%;
   }
 
-  /* --- Hero / signature element --- */
   .hero {
     display: flex;
     align-items: center;
@@ -115,16 +111,9 @@
     margin: 0 0 40px;
   }
 
-  /* --- Sections --- */
-  section {
-    margin-bottom: 28px;
-  }
+  section { margin-bottom: 28px; }
 
-  .row {
-    display: flex;
-    gap: 12px;
-    align-items: flex-end;
-  }
+  .row { display: flex; gap: 12px; align-items: flex-end; }
   .row > * { flex: 1; }
 
   label {
@@ -148,9 +137,7 @@
     outline: none;
     transition: border-color 0.15s ease;
   }
-  input:focus {
-    border-color: var(--accent);
-  }
+  input:focus { border-color: var(--accent); }
   input::placeholder { color: #5c6070; }
 
   .mono-input input { font-family: var(--mono); font-size: 13.5px; }
@@ -202,10 +189,7 @@
     margin-top: 28px;
   }
 
-  .btn-small {
-    padding: 7px 12px;
-    font-size: 12.5px;
-  }
+  .btn-small { padding: 7px 12px; font-size: 12.5px; }
 
   .btn-back {
     background: none;
@@ -226,7 +210,6 @@
     margin: 32px 0;
   }
 
-  /* --- Advanced (collapsible) --- */
   .advanced summary {
     cursor: pointer;
     font-size: 13.5px;
@@ -235,10 +218,7 @@
     list-style: none;
   }
   .advanced summary::-webkit-details-marker { display: none; }
-  .advanced summary::before {
-    content: "▸ ";
-    color: var(--accent);
-  }
+  .advanced summary::before { content: "▸ "; color: var(--accent); }
   .advanced[open] summary::before { content: "▾ "; }
   .advanced > div {
     margin-top: 18px;
@@ -247,7 +227,9 @@
     gap: 18px;
   }
 
-  /* --- Chat ID block --- */
+  .field-pair { display: flex; gap: 12px; }
+  .field-pair > * { flex: 1; }
+
   .chatid-box {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -275,7 +257,6 @@
   .chatid-found.show { display: block; }
   .chatid-found strong { font-family: var(--mono); color: var(--success); }
 
-  /* --- Status message --- */
   .status {
     margin-top: 18px;
     padding: 13px 15px;
@@ -295,10 +276,7 @@
     color: var(--error);
   }
 
-  /* --- Watches List --- */
-  .watches-list {
-    display: none;
-  }
+  .watches-list { display: none; }
   .watches-list.show { display: block; }
 
   .watch-item {
@@ -313,27 +291,10 @@
     gap: 12px;
   }
 
-  .watch-info {
-    flex: 1;
-  }
-
-  .watch-name {
-    font-weight: 600;
-    font-size: 15px;
-    margin: 0 0 6px;
-  }
-
-  .watch-meta {
-    font-size: 12px;
-    color: var(--muted);
-    line-height: 1.4;
-  }
-
-  .watch-actions {
-    display: flex;
-    gap: 6px;
-    flex-shrink: 0;
-  }
+  .watch-info { flex: 1; }
+  .watch-name { font-weight: 600; font-size: 15px; margin: 0 0 6px; }
+  .watch-meta { font-size: 12px; color: var(--muted); line-height: 1.4; }
+  .watch-actions { display: flex; gap: 6px; flex-shrink: 0; }
 
   .btn-icon {
     padding: 8px 10px;
@@ -349,17 +310,8 @@
     font-family: 'Space Grotesk', sans-serif;
   }
 
-  /* --- Inline forma (zamjena za popup) ---
-     Umjesto fixed-overlay modala, forma je sad običan panel unutar iste
-     stranice - zamjenjuje listu praćenja dok je otvorena, bez odvojenog
-     "prozora". Djeluje kao prirodan nastavak stranice, ne kao prekid. */
-  .form-panel {
-    display: none;
-  }
-  .form-panel.show {
-    display: block;
-    animation: fadeIn 0.2s ease;
-  }
+  .form-panel { display: none; }
+  .form-panel.show { display: block; animation: fadeIn 0.2s ease; }
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(4px); }
     to   { opacity: 1; transform: translateY(0); }
@@ -372,7 +324,6 @@
     font-family: 'Space Grotesk', sans-serif;
   }
 
-  /* --- Footer: suptilan, uvijek pri dnu, odvojen linijom --- */
   footer {
     text-align: center;
     padding: 20px 24px 28px;
@@ -399,7 +350,6 @@
   </div>
   <p class="lede">Reci nam šta tražiš na OLX-u i javljamo se na Telegram čim se pojavi oglas koji odgovara — ili čim nekom postojećem padne cijena.</p>
 
-  <!-- USER SETUP -->
   <div id="userSetup" style="display: block;">
     <section>
       <div class="row">
@@ -414,7 +364,6 @@
     <div id="setupStatus" class="status"></div>
   </div>
 
-  <!-- WATCHES LIST -->
   <div id="watchesList" class="watches-list">
     <section>
       <h2 class="section-title">Moja praćenja</h2>
@@ -424,7 +373,6 @@
     <div id="listStatus" class="status"></div>
   </div>
 
-  <!-- INLINE FORM PANEL (zamjena za popup) -->
   <div id="watchFormPanel" class="form-panel">
     <button type="button" class="btn-back" id="backBtn">← Nazad na praćenja</button>
     <div class="panel-header" id="panelTitle">Novo praćenje</div>
@@ -452,13 +400,13 @@
 
       <section>
         <label for="required_any">Mora sadržavati (odvoji zarezom)</label>
-        <input type="text" id="required_any" placeholder="npr. 16gb, 2x8">
+        <input type="text" id="required_any" placeholder="npr. 16GB, 2x8 (za RAM) ili 180Hz, 240Hz (za monitore)">
         <p class="hint">Oglas mora imati BAR JEDNU od ovih riječi u naslovu ili opisu.</p>
       </section>
 
       <section>
         <label for="excluded">Odbaci ako sadrži (odvoji zarezom)</label>
-        <input type="text" id="excluded" placeholder="npr. laptop, neispravno">
+        <input type="text" id="excluded" placeholder="npr. laptop, neispravno, polomljeno">
       </section>
 
       <details class="advanced">
@@ -468,13 +416,23 @@
             <label for="required_all">Mora sadržavati SVE ove riječi</label>
             <input type="text" id="required_all" placeholder="npr. ddr4">
           </div>
+
           <div>
-            <label for="min_speed_mhz">Minimalna brzina u MHz (za RAM)</label>
-            <input type="number" id="min_speed_mhz" placeholder="npr. 3200">
+            <label style="margin-bottom:6px;">Minimalna vrijednost (opciono)</label>
+            <div class="field-pair">
+              <input type="number" id="min_value" placeholder="npr. 180 ili 3200">
+              <input type="text" id="min_value_unit" placeholder="jedinica: Hz, MHz, GB...">
+            </div>
+            <p class="hint">Radi za bilo šta sa brojem + jedinicom u opisu - brzina osvježavanja monitora (Hz), brzina RAM-a (MHz), itd. Oglas mora eksplicitno navesti vrijednost jednaku ili veću od ove.</p>
           </div>
+
           <div>
-            <label for="single_stick_max_price_km">Prag cijene za pojedinačan komad</label>
-            <input type="number" id="single_stick_max_price_km" placeholder="opciono">
+            <label style="margin-bottom:6px;">Poseban slučaj (opciono)</label>
+            <div class="field-pair">
+              <input type="text" id="special_keyword" placeholder="riječ, npr. 1x16">
+              <input type="number" id="special_keyword_max_price_km" placeholder="poseban prag u KM">
+            </div>
+            <p class="hint">Ako oglas sadrži tu riječ, primijeni OVAJ (obično niži) cjenovni prag umjesto onog gore - npr. pojedinačan RAM štapić (1x16) je manje vrijedan od para, pa mu treba niža granica cijene.</p>
           </div>
         </div>
       </details>
@@ -512,11 +470,9 @@
   document.getElementById("botLink").href = `https://t.me/${BOT_USERNAME}`;
   document.getElementById("botLink").textContent = `@${BOT_USERNAME}`;
 
-  // ============ STATE ============
   let currentUser = "";
   let watches = [];
 
-  // ============ UTILITIES ============
   function showStatus(el, message, ok) {
     el.textContent = message;
     el.className = "status show " + (ok ? "ok" : "err");
@@ -526,7 +482,6 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
-  // ============ INLINE FORM PANEL (zamjena za popup) ============
   function closeForm() {
     document.getElementById("watchFormPanel").classList.remove("show");
     document.getElementById("watchesList").classList.add("show");
@@ -570,35 +525,32 @@
     document.getElementById("required_any").value = (watch.required_keywords_any || []).join(", ");
     document.getElementById("excluded").value = (watch.excluded_keywords || []).join(", ");
     document.getElementById("required_all").value = (watch.required_keywords_all || []).join(", ");
-    document.getElementById("min_speed_mhz").value = watch.min_speed_mhz ?? "";
-    document.getElementById("single_stick_max_price_km").value = watch.single_stick_max_price_km ?? "";
-    document.getElementById("telegram_chat_id").value = watch.telegram_chat_id || "";
-  }
 
-  function parseCsvList(value) {
-    return (value || "")
-      .split(",")
-      .map(s => s.trim())
-      .filter(Boolean);
+    // Generička polja - sa fallback-om na stara RAM-specifična polja ako je
+    // watch napravljen prije generalizacije (uređivanje starog watcha ne
+    // gubi te podatke).
+    document.getElementById("min_value").value = watch.min_value ?? watch.min_speed_mhz ?? "";
+    document.getElementById("min_value_unit").value = watch.min_value_unit || (watch.min_speed_mhz ? "MHz" : "");
+    document.getElementById("special_keyword").value = watch.special_keyword || (watch.single_stick_max_price_km != null ? "1x16" : "");
+    document.getElementById("special_keyword_max_price_km").value = watch.special_keyword_max_price_km ?? watch.single_stick_max_price_km ?? "";
+
+    document.getElementById("telegram_chat_id").value = watch.telegram_chat_id || "";
   }
 
   function formatPrice(price) {
     return price ? `do ${price} KM` : "bez limita";
   }
 
-  // ============ LOAD WATCHES ============
   document.getElementById("loadWatchesBtn").addEventListener("click", async () => {
     const user = document.getElementById("user").value.trim();
     if (!user) {
       showStatus(document.getElementById("setupStatus"), "Prvo upiši svoje ime.", false);
       return;
     }
-
     try {
       currentUser = user;
       const resp = await fetch(`${WORKER_URL}/api/watches?user=${encodeURIComponent(user)}`);
       const data = await resp.json();
-
       if (resp.ok) {
         watches = data.watches || [];
         renderWatches();
@@ -612,14 +564,12 @@
     }
   });
 
-  // ============ RENDER WATCHES ============
   function renderWatches() {
     const container = document.getElementById("watchesContainer");
     if (watches.length === 0) {
       container.innerHTML = '<p style="color: var(--muted); text-align: center;">Nemaš još nijednog praćenja. Dodaj prvo!</p>';
       return;
     }
-
     container.innerHTML = watches.map(watch => `
       <div class="watch-item">
         <div class="watch-info">
@@ -644,7 +594,6 @@
         e.preventDefault();
         const action = btn.dataset.action;
         const watchId = btn.dataset.watch;
-
         if (action === "edit") openForm(watchId);
         else if (action === "delete") await deleteWatch(watchId);
         else if (action === "toggle") await toggleWatch(watchId);
@@ -652,15 +601,10 @@
     });
   }
 
-  // ============ ADD WATCH ============
-  document.getElementById("addWatchBtn").addEventListener("click", () => {
-    openForm();
-  });
+  document.getElementById("addWatchBtn").addEventListener("click", () => openForm());
 
-  // ============ FORM SUBMISSION ============
   document.getElementById("watchForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-
     const watchId = document.getElementById("editingWatchId").value;
     const payload = {
       user: currentUser,
@@ -670,8 +614,10 @@
       required_any: document.getElementById("required_any").value,
       excluded: document.getElementById("excluded").value,
       required_all: document.getElementById("required_all").value,
-      min_speed_mhz: document.getElementById("min_speed_mhz").value,
-      single_stick_max_price_km: document.getElementById("single_stick_max_price_km").value,
+      min_value: document.getElementById("min_value").value,
+      min_value_unit: document.getElementById("min_value_unit").value.trim(),
+      special_keyword: document.getElementById("special_keyword").value.trim(),
+      special_keyword_max_price_km: document.getElementById("special_keyword_max_price_km").value,
       telegram_chat_id: document.getElementById("telegram_chat_id").value.trim(),
     };
 
@@ -680,17 +626,13 @@
     submitBtn.textContent = "Čuvam...";
 
     try {
-      const url = watchId
-        ? `${WORKER_URL}/api/watches/${watchId}`
-        : `${WORKER_URL}/api/watches`;
+      const url = watchId ? `${WORKER_URL}/api/watches/${watchId}` : `${WORKER_URL}/api/watches`;
       const method = watchId ? "PUT" : "POST";
-
       const resp = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-
       const data = await resp.json();
       if (resp.ok) {
         showStatus(document.getElementById("formStatus"), "Sačuvano!", true);
@@ -722,17 +664,14 @@
     }
   }
 
-  // ============ DELETE WATCH ============
   async function deleteWatch(watchId) {
     if (!confirm("Sigurno želiš obrisati ovo praćenje?")) return;
-
     try {
       const resp = await fetch(`${WORKER_URL}/api/watches/${watchId}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user: currentUser }),
       });
-
       if (resp.ok) {
         await reloadWatches();
       } else {
@@ -744,7 +683,6 @@
     }
   }
 
-  // ============ TOGGLE WATCH ============
   async function toggleWatch(watchId) {
     try {
       const resp = await fetch(`${WORKER_URL}/api/watches/${watchId}/toggle`, {
@@ -752,7 +690,6 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user: currentUser }),
       });
-
       if (resp.ok) {
         await reloadWatches();
       } else {
@@ -764,7 +701,6 @@
     }
   }
 
-  // ============ FIND CHAT ID ============
   document.getElementById("findChatIdBtn").addEventListener("click", async () => {
     const box = document.getElementById("chatIdFound");
     box.className = "chatid-found show";
@@ -789,7 +725,6 @@
     }
   });
 
-  // ============ NAZAD DUGME ============
   document.getElementById("backBtn").addEventListener("click", closeForm);
 </script>
 
