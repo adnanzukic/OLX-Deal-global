@@ -8,6 +8,15 @@
  * Potrebni Worker "secrets" (podešavaju se u Cloudflare dashboardu, ne ovdje):
  *   GITHUB_TOKEN      - GitHub Personal Access Token sa 'repo' dozvolom
  *   TELEGRAM_BOT_TOKEN - isti bot token koji koristi i scraper.py (za "pronađi moj chat ID" pomoćnu funkciju)
+ *
+ * GENERIČKI KRITERIJI (ne samo RAM):
+ * - min_value / min_value_unit zamjenjuje stari min_speed_mhz (radi za
+ *   bilo koju jedinicu - Hz, MHz, GB, itd, ne samo RAM brzinu)
+ * - special_keyword / special_keyword_max_price_km zamjenjuje stari
+ *   single_stick_max_price_km (radi za bilo koju "posebna riječ -> poseban
+ *   cjenovni prag" kombinaciju, ne samo pojedinačan RAM štapić)
+ * Stara polja se i dalje prihvataju ako ih neko pošalje (scraper.py ih
+ * podržava radi kompatibilnosti sa već sačuvanim watchevima).
  */
 
 const OWNER = "adnanzukic";
@@ -120,6 +129,21 @@ function parseCsvList(value) {
     .filter(Boolean);
 }
 
+/**
+ * Sastavi criteria objekat od podataka iz obrasca - GENERIČKI, koristi se
+ * i za nov watch i za ažuriranje postojećeg.
+ */
+function buildGenericFields(body) {
+  return {
+    min_value: body.min_value ? Number(body.min_value) : null,
+    min_value_unit: body.min_value_unit ? String(body.min_value_unit).trim() : null,
+    special_keyword: body.special_keyword ? String(body.special_keyword).trim() : null,
+    special_keyword_max_price_km: body.special_keyword_max_price_km
+      ? Number(body.special_keyword_max_price_km)
+      : null,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Multi-watch API
 // ---------------------------------------------------------------------------
@@ -214,10 +238,7 @@ async function handlePostWatch(request, env) {
       required_keywords_any: parseCsvList(body.required_any),
       required_keywords_all: parseCsvList(body.required_all),
       excluded_keywords: parseCsvList(body.excluded),
-      min_speed_mhz: body.min_speed_mhz ? Number(body.min_speed_mhz) : null,
-      single_stick_max_price_km: body.single_stick_max_price_km
-        ? Number(body.single_stick_max_price_km)
-        : null,
+      ...buildGenericFields(body),
       use_vision_fallback: body.use_vision_fallback !== false,
       telegram_chat_id: String(body.telegram_chat_id),
     };
@@ -270,8 +291,21 @@ async function handlePutWatch(url, request, env) {
     if (body.required_any !== undefined) criteria.required_keywords_any = parseCsvList(body.required_any);
     if (body.required_all !== undefined) criteria.required_keywords_all = parseCsvList(body.required_all);
     if (body.excluded !== undefined) criteria.excluded_keywords = parseCsvList(body.excluded);
-    if (body.min_speed_mhz !== undefined) criteria.min_speed_mhz = body.min_speed_mhz ? Number(body.min_speed_mhz) : null;
-    if (body.single_stick_max_price_km !== undefined) criteria.single_stick_max_price_km = body.single_stick_max_price_km ? Number(body.single_stick_max_price_km) : null;
+
+    if (body.min_value !== undefined) criteria.min_value = body.min_value ? Number(body.min_value) : null;
+    if (body.min_value_unit !== undefined) criteria.min_value_unit = body.min_value_unit ? String(body.min_value_unit).trim() : null;
+    if (body.special_keyword !== undefined) criteria.special_keyword = body.special_keyword ? String(body.special_keyword).trim() : null;
+    if (body.special_keyword_max_price_km !== undefined) {
+      criteria.special_keyword_max_price_km = body.special_keyword_max_price_km
+        ? Number(body.special_keyword_max_price_km)
+        : null;
+    }
+    // Ako je watch star (napravljen prije generalizacije) i uređuje se sad
+    // preko novih polja, ukloni stara RAM-specifična polja da ne ostanu
+    // "duhovi" u pozadini koji bi mogli zbuniti buduću logiku.
+    if (body.min_value !== undefined) delete criteria.min_speed_mhz;
+    if (body.special_keyword !== undefined) delete criteria.single_stick_max_price_km;
+
     if ("use_vision_fallback" in body) criteria.use_vision_fallback = body.use_vision_fallback;
     if (body.telegram_chat_id) criteria.telegram_chat_id = String(body.telegram_chat_id);
 
@@ -417,10 +451,7 @@ async function handlePostConfig(request, env) {
       required_keywords_any: parseCsvList(body.required_any),
       required_keywords_all: parseCsvList(body.required_all),
       excluded_keywords: parseCsvList(body.excluded),
-      min_speed_mhz: body.min_speed_mhz ? Number(body.min_speed_mhz) : null,
-      single_stick_max_price_km: body.single_stick_max_price_km
-        ? Number(body.single_stick_max_price_km)
-        : null,
+      ...buildGenericFields(body),
       use_vision_fallback: body.use_vision_fallback !== false,
       telegram_chat_id: String(body.telegram_chat_id),
     };
