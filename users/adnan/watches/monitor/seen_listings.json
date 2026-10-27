@@ -486,9 +486,15 @@
     "matched": false
   },
   "80661029": {
-    "price": 170,
+    "price": 160,
     "title": "Gaming monitor",
     "url": "https://olx.ba/artikal/80661029",
+    "matched": false
+  },
+  "80683989": {
+    "price": 150,
+    "title": "Acer gaming monitor 27\"",
+    "url": "https://olx.ba/artikal/80683989",
     "matched": false
   }
 }
